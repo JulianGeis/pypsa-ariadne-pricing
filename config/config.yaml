@@ -4,7 +4,7 @@
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
-  prefix: 20241025_ptes_cost
+  prefix: 20241029-OneNode-3H
 
   name:
   # - CurrentPolicies
@@ -62,7 +62,7 @@ scenario:
   ll:
   - vopt
   clusters:
-  - 27 #current options: 27, 49
+  - 1 #current options: 27, 49
   opts:
   - ''
   sector_opts:
@@ -82,7 +82,8 @@ existing_capacities:
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#countries
 # Germany plus 12 "Stromnachbarn"
-countries: ['AT', 'BE', 'CH', 'CZ', 'DE', 'DK', 'FR', 'GB', 'LU', 'NL', 'NO', 'PL', 'SE', 'ES', 'IT']
+countries: 
+  - DE
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#snapshots
 snapshots:
@@ -199,23 +200,23 @@ clustering:
   # fw = fw.div(fw.min()).round()
   # fw["ES"] = 1
   # print(fw.div(fw.sum()).subtract(5e-5).round(4).to_dict().__repr__().replace(",","\n"))
-  focus_weights:
-  # 27 nodes: 8 for Germany, 3 for Italy, 2 each for Denmark, UK and Spain, 1 per each of other 10 "Stromnachbarn"
-    'DE': 0.2966
-    'AT': 0.0370
-    'BE': 0.0370
-    'CH': 0.0370
-    'CZ': 0.0370
-    'DK': 0.0741
-    'FR': 0.0370
-    'GB': 0.0741
-    'LU': 0.0370
-    'NL': 0.0370
-    'NO': 0.0370
-    'PL': 0.0370
-    'SE': 0.0370
-    'ES': 0.0741
-    'IT': 0.1111
+  # focus_weights:
+  # # 27 nodes: 8 for Germany, 3 for Italy, 2 each for Denmark, UK and Spain, 1 per each of other 10 "Stromnachbarn"
+  #   'DE': 0.2966
+  #   'AT': 0.0370
+  #   'BE': 0.0370
+  #   'CH': 0.0370
+  #   'CZ': 0.0370
+  #   'DK': 0.0741
+  #   'FR': 0.0370
+  #   'GB': 0.0741
+  #   'LU': 0.0370
+  #   'NL': 0.0370
+  #   'NO': 0.0370
+  #   'PL': 0.0370
+  #   'SE': 0.0370
+  #   'ES': 0.0741
+  #   'IT': 0.1111
   # high spatial resolution: change clusters to 49
   # 49 nodes: 30 for Germany, 3 for Italy, 2 each for Denmark, UK and Spain, 1 per each of other 10 "Stromnachbarn"
     # 'DE': 0.6124
@@ -234,7 +235,7 @@ clustering:
     # 'ES': 0.0408
     # 'IT': 0.0612
   temporal:
-    resolution_sector: 365H
+    resolution_sector: 3H
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#co2-budget
 co2_budget:
@@ -247,7 +248,7 @@ co2_budget:
   2050: 0.000 # climate-neutral by 2050
 
 wasserstoff_kernnetz:
-  enable: true
+  enable: false
   reload_locations: false
   divide_pipes: true
   pipes_segment_length: 10
@@ -300,7 +301,7 @@ sector:
   regional_coal_demand: true  #set to true if regional CO2 constraints needed
   gas_network: false
   regional_gas_demand: true
-  H2_retrofit: true
+  H2_retrofit: false
   biogas_upgrading_cc: true
   biomass_to_liquid: true
   biomass_to_liquid_cc: true
@@ -651,7 +652,7 @@ must_run_biogas:
   regions: ['DE']
 
 transmission_projects:
-  new_link_capacity: keep #keep or zero
+  enable: false
 
 onshore_nep_force:
   cutin_year: 2020

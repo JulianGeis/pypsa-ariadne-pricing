@@ -482,6 +482,7 @@ rule export_ariadne_variables:
         co2_sequestration_cost=config_provider("sector", "co2_sequestration_cost"),
         post_discretization=config_provider("solving", "options", "post_discretization"),
         NEP_year=config_provider("costs", "NEP"),
+        transmission_projects=config_provider("transmission_projects", "enable"),
     input:
         template=resources("template_ariadne_database.xlsx"),
         industry_demands=expand(
@@ -559,11 +560,11 @@ rule plot_ariadne_variables:
         + "ariadne/final_energy_residential_commercial_price.png",
         all_prices=RESULTS + "ariadne/all_prices.png",
         policy_carbon=RESULTS + "ariadne/policy_carbon.png",
-        investment_energy_supply=RESULTS + "ariadne/investment_energy_supply.png",
+        # investment_energy_supply=RESULTS + "ariadne/investment_energy_supply.png",
         elec_val_2020=RESULTS + "ariadne/elec_val_2020.png",
         trade=RESULTS + "ariadne/trade.png",
-        NEP_plot=RESULTS + "ariadne/NEP_plot.png",
-        NEP_Trassen_plot=RESULTS + "ariadne/NEP_Trassen_plot.png",
+        # NEP_plot=RESULTS + "ariadne/NEP_plot.png",
+        # NEP_Trassen_plot=RESULTS + "ariadne/NEP_Trassen_plot.png",
     log:
         RESULTS + "logs/plot_ariadne_variables.log",
     script:
