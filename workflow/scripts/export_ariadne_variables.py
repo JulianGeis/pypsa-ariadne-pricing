@@ -4653,7 +4653,7 @@ def get_ariadne_var(
             # get_capacity_additions_simple(n,region),
             # get_installed_capacities(n,region),
             get_capacity_additions(n, region),
-            get_investments(n, costs, region),
+            # get_investments(n, costs, region),
             # get_capacity_additions_nstat(n, region),
             get_production(region, year),
             get_primary_energy(n, region),
@@ -4806,11 +4806,15 @@ if __name__ == "__main__":
     # Load data
     _networks = [pypsa.Network(fn) for fn in snakemake.input.networks]
     modelyears = [fn[-7:-3] for fn in snakemake.input.networks]
-    # Hack the transmission projects
-    networks = [
-        hack_transmission_projects(n.copy(), _networks[0], int(my))
-        for n, my in zip(_networks, modelyears)
-    ]
+
+    if snakemake.params.transmission_projects:
+        # Hack the transmission projects
+        networks = [
+            hack_transmission_projects(n.copy(), _networks[0], int(my))
+            for n, my in zip(_networks, modelyears)
+        ]
+    else:
+        networks = _networks
 
     if "debug" == "debug":  # For debugging
         var = pd.Series()
