@@ -185,7 +185,8 @@ def _get_h2_fossil_fraction(n):
         .groupby("carrier")
         .sum()
     )
-
+    if "SMR" not in total_h2_supply.index:
+        return 0
     h2_fossil_fraction = total_h2_supply.get("SMR") / total_h2_supply.sum()
 
     return h2_fossil_fraction
@@ -2768,7 +2769,7 @@ def get_emissions(n, region, _energy_totals, industry_demand):
     ) + var["Emissions|Gross Fossil CO2|Energy|Supply|Gases"]
 
     var["Emissions|CO2|Supply|Non-Renewable Waste"] = (
-        co2_emissions.get("HVC to air").sum() + waste_CHP_emissions.sum()
+        (co2_emissions.get("HVC to air").sum() if "HVC to air" in co2_emissions.index else 0) + waste_CHP_emissions.sum()
     )
 
     var["Emissions|Gross Fossil CO2|Energy|Supply|Liquids"] = co2_emissions.get(
@@ -3095,8 +3096,17 @@ def get_prices(n, region):
     except KeyError:
         co2_limit_de = 0
 
+    n_glob_co2 = (
+        "CO2Limit" if "CO2Limit" in n.global_constraints.index else "CO2LimitUpstream"
+    )
+    n_loc_co2 = (
+        "co2_limit-DE"
+        if "co2_limit-DE" in n.global_constraints.index
+        else "co2_limit_upstream-DE"
+    )
+
     # co2 additions
-    co2_price = -n.global_constraints.loc["CO2Limit", "mu"] - co2_limit_de
+    co2_price = -n.global_constraints.loc[n_glob_co2, "mu"] - co2_limit_de 
     # specific emissions in tons CO2/MWh according to n.links[n.links.carrier =="your_carrier].efficiency2.unique().item()
     specific_emissions = {
         "oil": 0.2571,
@@ -3892,11 +3902,11 @@ def get_policy(n, investment_year):
     except KeyError:
         co2_limit_de = 0
     var["Price|Carbon"] = (
-        -n.global_constraints.loc["CO2Limit", "mu"] - co2_limit_de + co2_price_add_on
+        -n.global_constraints.loc[n_glob_co2, "mu"] - co2_limit_de + co2_price_add_on
     )
 
     var["Price|Carbon|EU-wide Regulation All Sectors"] = (
-        -n.global_constraints.loc["CO2Limit", "mu"] + co2_price_add_on
+        -n.global_constraints.loc[n_glob_co2, "mu"] + co2_price_add_on
     )
 
     # Price|Carbon|EU-wide Regulation Non-ETS
@@ -4661,7 +4671,7 @@ def get_ariadne_var(
             # get_capacity_additions_simple(n,region),
             # get_installed_capacities(n,region),
             get_capacity_additions(n, region),
-            get_investments(n, costs, region),
+            # get_investments(n, costs, region),
             # get_capacity_additions_nstat(n, region),
             get_production(region, year),
             get_primary_energy(n, region),
@@ -4814,11 +4824,15 @@ if __name__ == "__main__":
     # Load data
     _networks = [pypsa.Network(fn) for fn in snakemake.input.networks]
     modelyears = [fn[-7:-3] for fn in snakemake.input.networks]
-    # Hack the transmission projects
-    networks = [
-        hack_transmission_projects(n.copy(), _networks[0], int(my))
-        for n, my in zip(_networks, modelyears)
-    ]
+    if snakemake.params.transmission_projects:
+        # Hack the transmission projects
+        networks = [
+            hack_transmission_projects(n.copy(), _networks[0], int(my))
+            for n, my in zip(_networks, modelyears)
+        ]
+    else:
+        networks = _networks
+
 
     if "debug" == "debug":  # For debugging
         var = pd.Series()

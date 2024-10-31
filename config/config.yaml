@@ -4,12 +4,12 @@
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
-  prefix: 20241025_ptes_cost
+  prefix: 20241031-OneNode-DownstreamVsUpstream-NoDistGrid
 
   name:
   # - CurrentPolicies
    - KN2045_Bal_v4
-  # - KN2045_Bal_v4_upstream
+   - KN2045_Bal_v4_upstream
   # - KN2045_Elec_v4
   # - KN2045_H2_v4
   # - KN2045plus_EasyRide
@@ -71,10 +71,10 @@ scenario:
   planning_horizons:
   - 2020
   - 2025
-  # - 2030
-  # - 2035
-  # - 2040
-  # - 2045
+  - 2030
+  - 2035
+  - 2040
+  - 2045
   # - 2050
 
 existing_capacities:
@@ -84,7 +84,8 @@ existing_capacities:
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#countries
 # Germany plus 12 "Stromnachbarn"
-countries: ['DE']
+countries: 
+  - DE
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#snapshots
 snapshots:
@@ -236,7 +237,7 @@ clustering:
     # 'ES': 0.0408
     # 'IT': 0.0612
   temporal:
-    resolution_sector: 100H
+    resolution_sector: 3H
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#co2-budget
 co2_budget:
@@ -292,20 +293,20 @@ sector:
       2045: 0.8
       2050: 1.0
   central_heat_vent: true
-  co2_spatial: false # diff
-  biomass_spatial: false # diff
+  co2_spatial: true
+  biomass_spatial: true
   #TBD what to include in config
   #relax so no infeasibility in 2050 with no land transport demand
   min_part_load_fischer_tropsch: 0.
-  regional_methanol_demand: false  #set to true if regional CO2 constraints needed
-  regional_oil_demand: false  #set to true if regional CO2 constraints needed
-  regional_coal_demand: false  #set to true if regional CO2 constraints needed
+  regional_methanol_demand: true  #set to true if regional CO2 constraints needed
+  regional_oil_demand: true  #set to true if regional CO2 constraints needed
+  regional_coal_demand: true  #set to true if regional CO2 constraints needed
   gas_network: false 
-  regional_gas_demand: false
+  regional_gas_demand: true
   H2_retrofit: false
-  biogas_upgrading_cc: false
-  biomass_to_liquid: false
-  biomass_to_liquid_cc: false
+  biogas_upgrading_cc: true
+  biomass_to_liquid: true
+  biomass_to_liquid_cc: true
   cluster_heat_buses: true
   # calculated based on ariadne "Stock|Space Heating"
   # and then 2% of buildings renovated per year to reduce their demand by 80%
@@ -342,7 +343,7 @@ sector:
     2045: 0.1
     2050: 0.0
   electricity_distribution_grid: false
-  co2_sequestration_potential: 250
+  co2_sequestration_potential: 150
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#industry
 industry:
@@ -667,7 +668,7 @@ emissions_upstream:
   enable: false
 
 transmission_projects:
-  new_link_capacity: keep #keep or zero
+  enable: false
 
 onshore_nep_force:
   cutin_year: 2020

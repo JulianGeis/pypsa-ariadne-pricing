@@ -760,18 +760,18 @@ if __name__ == "__main__":
         unit="EUR/tCO2",
     )
 
-    within_plot(
-        df[
-            df.index.get_level_values("Variable").str.startswith(
-                "Investment|Energy Supply"
-            )
-        ],
-        dfremind,
-        title="Investment in Energy Supply",
-        savepath=snakemake.output.investment_energy_supply,
-        unit="billion EUR",
-        write_sum=True,
-    )
+    # within_plot(
+    #     df[
+    #         df.index.get_level_values("Variable").str.startswith(
+    #             "Investment|Energy Supply"
+    #         )
+    #     ],
+    #     dfremind,
+    #     title="Investment in Energy Supply",
+    #     savepath=snakemake.output.investment_energy_supply,
+    #     unit="billion EUR",
+    #     write_sum=True,
+    # )
 
     elec_val_plot(df, savepath=snakemake.output.elec_val_2020)
 
@@ -783,5 +783,5 @@ if __name__ == "__main__":
         unit="PJ/yr",
     )
 
-    plot_NEP(df, savepath=snakemake.output.NEP_plot)
-    plot_NEP_Trassen(df, savepath=snakemake.output.NEP_Trassen_plot)
+    # plot_NEP(df, savepath=snakemake.output.NEP_plot)
+    # plot_NEP_Trassen(df, savepath=snakemake.output.NEP_Trassen_plot)

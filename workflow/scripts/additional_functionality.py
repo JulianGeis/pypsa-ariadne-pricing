@@ -9,11 +9,11 @@ from xarray import DataArray
 
 logger = logging.getLogger(__name__)
 
-# specific emissions in tons CO2/MWh according to n.links[n.links.carrier =="your_carrier].efficiency2.unique().item()
 specific_emissions = {
     "oil" : 0.2571,
     "oil primary" : 0.2571,
     "gas" : 0.198, # OCGT
+    "gas primary" : 0.198, # OCGT
     "coal" : 0.3361,
     "lignite" : 0.4069,
 }
@@ -337,10 +337,23 @@ def electricity_import_limits(n, investment_year, limits_volume_max):
                 carrier_attribute="",
             )
 
-def emissions_upstream(n,snakemake):
+def emissions_upstream(n, limit_countries, snakemake):
 
     logger.info(f"Adding global upstream co2 constraint.")
     limit =  n.meta["_global_co2_limit"]
+
+    # DE limit
+    nhours = n.snapshot_weightings.generators.sum()
+    nyears = nhours / 8760
+
+    sectors = determine_emission_sectors(n.config["sector"])
+
+    # convert MtCO2 to tCO2
+    co2_totals = 1e6 * pd.read_csv(snakemake.input.co2_totals_name, index_col=0)
+
+    co2_total_totals = co2_totals[sectors].sum(axis=1) * nyears
+
+    limit = co2_total_totals["DE"] * limit_countries["DE"]
 
     lhs = []
 
@@ -362,7 +375,7 @@ def emissions_upstream(n,snakemake):
         nfi_load_i = n.loads.index[(n.loads.carrier == "naphtha for industry")]
         nfi_load = n.loads.loc[nfi_load_i, "p_set"]*n.snapshot_weightings.generators.sum()
         nfi_links_i = n.links.index[(n.links.carrier == "naphtha for industry") & (n.links.carrier == "naphtha for industry")]
-        lhs.append(nfi_load * ((1-n.links.loc[nfi_links_i].efficiency2) * specific_emisisons["oil"] - n.links.loc[nfi].efficiency3))
+        lhs.append(-(nfi_load * ((1-n.links.loc[nfi_links_i].efficiency2) * specific_emissions["oil"] - n.links.loc[nfi_links_i].efficiency3)))
 
     # # process emissions
     # i_pe = n.links.index[n.links.carrier == "process emissions"]
@@ -844,18 +857,17 @@ def additional_functionality(n, snapshots, snakemake):
     investment_year = int(snakemake.wildcards.planning_horizons[-4:])
     constraints = snakemake.params.solving["constraints"]
 
-    # if constraints["limits_capacity_min"] is not None:
-    #     add_capacity_limits(
-    #         n, investment_year, constraints["limits_capacity_min"], "minimum"
-    #     )
+    # add_capacity_limits(
+    #     n, investment_year, constraints["limits_capacity_min"], "minimum"
+    # )
 
-    add_capacity_limits(
-        n, investment_year, constraints["limits_capacity_max"], "maximum"
-    )
+    # add_capacity_limits(
+    #     n, investment_year, constraints["limits_capacity_max"], "maximum"
+    # )
 
-    add_power_limits(n, investment_year, constraints["limits_power_max"])
+    # add_power_limits(n, investment_year, constraints["limits_power_max"])
 
-    FT_production_limit(n, investment_year, constraints["limits_volume_max"])
+    # FT_production_limit(n, investment_year, constraints["limits_volume_max"])
 
     # if int(snakemake.wildcards.clusters) != 1:
     #     h2_import_limits(n, investment_year, constraints["limits_volume_max"])
@@ -886,9 +898,10 @@ def additional_functionality(n, snapshots, snakemake):
     #     )
     # else:
     #     logger.warning("No national CO2 budget specified!")
-
+    
     if snakemake.config["emissions_upstream"]["enable"]:
-        emissions_upstream(n, snakemake)
+        limit_countries = constraints["co2_budget_national"][investment_year]
+        emissions_upstream(n, limit_countries, snakemake)
 
     if investment_year == 2020:
         adapt_nuclear_output(n)
