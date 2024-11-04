@@ -1481,11 +1481,14 @@ if __name__ == "__main__":
     _networks = [pypsa.Network(fn) for fn in snakemake.input.networks]
     modelyears = [fn[-7:-3] for fn in snakemake.input.networks]
 
-    # Hack the transmission projects
-    networks = [
-        hack_transmission_projects(n.copy(), _networks[0], int(my), snakemake, costs)
-        for n, my in zip(_networks, modelyears)
-    ]
+    if snakemake.params.transmission_projects:   
+        # Hack the transmission projects
+        networks = [
+            hack_transmission_projects(n.copy(), _networks[0], int(my), snakemake, costs)
+            for n, my in zip(_networks, modelyears)
+        ]
+    else:
+        networks = _networks
 
     ###
 
