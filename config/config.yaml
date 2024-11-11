@@ -4,7 +4,7 @@
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
-  prefix: 20241031-OneNode-DownstreamVsUpstream-NoDistGrid
+  prefix: 20241108-OneNode-DownstreamVsUpstream-No_min_part_load
 
   name:
   # - CurrentPolicies

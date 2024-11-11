@@ -2828,6 +2828,10 @@ def get_emissions(n, region, _energy_totals, industry_demand):
         + var["Emissions|Gross Fossil CO2|Energy|Supply|Hydrogen"]
     )
 
+    # necessary if you run with (  waste_to_energy: false; waste_to_energy_cc: false)
+    if "waste CHP" not in  n.carriers.index.unique():
+        var["Emissions|CO2|Energy and Industrial Processes"] += co2_emissions.get("naphtha for industry", 0)
+
     emission_difference = var["Emissions|CO2"] - (
         var["Emissions|CO2|Energy and Industrial Processes"]
         + var["Emissions|CO2|Energy|Demand|Bunkers"]
@@ -4837,7 +4841,7 @@ if __name__ == "__main__":
 
     if "debug" == "debug":  # For debugging
         var = pd.Series()
-        idx = -1
+        idx = 0
         n = networks[idx]
         c = costs[idx]
         _industry_demand = industry_demands[idx]

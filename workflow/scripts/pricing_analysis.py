@@ -89,9 +89,11 @@ def timestep_before(timestep, n):
     return timestep_b
 
 
-def supply_price_link(n, link, timestep, bus, co2_add_on=False):  
+def supply_price_link(n, link, timestep, bus, co2_add_on=False, print_steps=False):  
+    buses = ["bus0", "bus1", "bus2", "bus3", "bus4"]
     cols = [col for col in n.links.columns if col.startswith("bus") and n.links.loc[link, col] != ""]
-    loc_buses = n.links.loc[link, cols].tolist()
+    buses = buses[:len(cols)]
+    loc_buses = n.links.loc[link, buses].tolist()
     j = loc_buses.index(bus)
     efficiency_link = 1 if j == 0 else n.links.loc[link, f"efficiency{j}" if j > 1 else 'efficiency']
     supply_price = 0
@@ -105,19 +107,26 @@ def supply_price_link(n, link, timestep, bus, co2_add_on=False):
             mc = n.links.loc[link, 'marginal_cost']
             cost = (price + mc) / efficiency_link
             supply_price += cost
+            if print_steps:
+                logger.warning(f"Cost at bus {loc_bus}: {cost} from price {price} + mc {mc} / efficiency {efficiency_link}")
         elif (i > 0):
             # Revenue / costs at other buses
             price = price = n.buses_t.marginal_price.loc[timestep, loc_bus]
-            if (n.buses.loc[loc_bus, "carrier"] in ["co2", "co2 stored"]) & co2_add_on:
-                price += n.global_constraints.loc["co2_limit_upstream-DE"].mu
+            if (n.buses.loc[loc_bus, "carrier"] in ["co2"]) & co2_add_on: # "co2 stored"
+                price += n.global_constraints.loc["CO2LimitUpstream"].mu
             rev = price * efficiency_i / efficiency_link         
             supply_price -= rev
+            if print_steps:
+                logger.warning(f"Revenue at bus {loc_bus}: {rev} from price {price} * efficiency {efficiency_i} / efficiency {efficiency_link}")
     
     return supply_price
 
 def demand_price_link(n, link, timestep, bus, co2_add_on=False, print_steps=False):  
+
+    buses = ["bus0", "bus1", "bus2", "bus3", "bus4"]
     cols = [col for col in n.links.columns if col.startswith("bus") and n.links.loc[link, col] != ""]
-    loc_buses = n.links.loc[link, cols].tolist()
+    buses = buses[:len(cols)]
+    loc_buses = n.links.loc[link, buses].tolist()
     demand_price = 0
     if bus != n.links.loc[link, "bus0"]:
         for i, loc_bus in enumerate(loc_buses):
@@ -129,7 +138,7 @@ def demand_price_link(n, link, timestep, bus, co2_add_on=False, print_steps=Fals
                         price += n.global_constraints.loc["co2_limit_upstream-DE"].mu
                     rev = price * efficiency_i
                     if print_steps:
-                        print(f"Revenue at bus {loc_bus}: {rev} from price {price} * efficiency {efficiency_i}")
+                        logger.warning(f"Revenue at bus {loc_bus}: {rev} from price {price} * efficiency {efficiency_i}")
                     demand_price += rev
 
     for i, loc_bus in enumerate(loc_buses):
@@ -141,12 +150,12 @@ def demand_price_link(n, link, timestep, bus, co2_add_on=False, print_steps=Fals
                     price += n.global_constraints.loc["co2_limit_upstream-DE"].mu
                 rev = price * efficiency_i
                 if print_steps:
-                    print(f"Revenue at bus {loc_bus}: {rev} from price {price} * efficiency {efficiency_i}")
+                    logger.warning(f"Revenue at bus {loc_bus}: {rev} from price {price} * efficiency {efficiency_i}")
                 demand_price += rev
      
     demand_price -= n.links.loc[link, 'marginal_cost']
     if print_steps:
-        print(f"Marginal cost of {link}: {n.links.loc[link, 'marginal_cost']}")
+        logger.warning(f"Marginal cost of {link}: {n.links.loc[link, 'marginal_cost']}")
     
     return demand_price
 
@@ -343,8 +352,8 @@ def plot_supply_demand(n,
 
     # Process the demand data
     demand = demand[demand[d] > 1]  # Drop all technologies with demand less than 1e-1 MW
-    demand[d] = demand[d] / 1e3  # Convert to GW
-    demand.bidding_price = demand.bidding_price.clip(lower=0) # Clip negative bidding prices to 0 
+    demand.loc[:,d] = demand[d] / 1e3  # Convert to GW
+    demand.loc[:,"bidding_price"] = demand.bidding_price.clip(lower=0) # Clip negative bidding prices to 0 
     # group demand technologies together, where the bidding price differene is lower than a threshold
     if compress_demand:
         demand = get_compressed_demand(demand, th=0.1)
@@ -361,7 +370,7 @@ def plot_supply_demand(n,
     demand["bidding_price"] = demand["bidding_price"].replace(np.inf, max_finite_bidding_price * 1.1)
     
     # Cumulative sum of demand
-    demand[d] = demand[d].cumsum()
+    demand.loc[:,d] = demand[d].cumsum()
 
     if compress_demand:
         demand.reset_index(drop=True, inplace=True)
@@ -442,7 +451,7 @@ def get_compressed_demand(demand, th):
     })
     df = demand.sort_values(by=['carrier', 'bidding_price']).reset_index(drop=True)
     group = (df['bidding_price'].diff().abs() > th).cumsum()
-    df['group'] = group
+    df.loc[:,'group'] = group
 
     grouped_df = df.groupby(['carrier', 'group']).agg({
         'bidding_price': 'mean',  
@@ -461,7 +470,7 @@ def plot_supply_demand_s(n, supply, demand, buses, timestep, ylim=None, p="p_nom
     # Filter out technologies with negative supply
     drop_c = ["electricity distribution grid", "load", "BEV charger"]
     supply = supply[(supply[p] >= 5) & ~(supply.carrier.isin(drop_c))]
-    supply[p] = supply[p] / 1e3 # Convert to GW
+    supply.loc[:,p] = supply[p] / 1e3 # Convert to GW
     
     if whole_system:
         supply = supply[~supply.carrier.isin(["AC", "DC"])]
@@ -469,8 +478,8 @@ def plot_supply_demand_s(n, supply, demand, buses, timestep, ylim=None, p="p_nom
     
     supply = supply.sort_values(by=mc)
     demand = demand[demand[d] > 1]
-    demand[d] = demand[d] / 1e3
-    demand.bidding_price = demand.bidding_price.clip(lower=0) # Clip negative bidding prices to 0
+    demand.loc[:,d] = demand[d] / 1e3
+    demand.loc["bidding_price"] = demand.bidding_price.clip(lower=0) # Clip negative bidding prices to 0
     
     if compress_demand:
         demand = get_compressed_demand(demand, th=0.1)
@@ -619,18 +628,18 @@ def get_all_demand_prices(n, bus, period=None, carriers=None):
     
     return res
 
-def price_setter(n, bus, timestep, co2_add_on=False, suppress_warnings=False):
+def price_setter(n, bus, timestep, minimum_generation=1e-3, co2_add_on=False, suppress_warnings=False):
     mp = n.buses_t.marginal_price.loc[timestep, bus]
     if not isinstance(bus, list):
         bus = [bus]
     supply, demand = get_supply_demand(n, bus, timestep, co2_add_on)
 
     # Filter where supply (p) is greater than 0.1 (using 1 omits the marginal generator at some times)
-    th_p = 1e-3
+    th_p = minimum_generation
     drop_c_s = ["electricity distribution grid", "load", "BEV charger"]
     supply = supply[(supply.p > th_p) & ~(supply.carrier.isin(drop_c_s))]
     demand = demand[demand.p > th_p]
-    
+
     # Find supply items where 'mc_final' is equal to the marginal price
     supply_closest = supply[supply['mc_final'] == mp]
     demand_closest = demand[demand['bidding_price'] == mp]
@@ -657,18 +666,52 @@ def price_setter(n, bus, timestep, co2_add_on=False, suppress_warnings=False):
     sc["marginal price @ bus"] = mp
     sc["sp - mp"] = sc.loc[:,"supply_price"] - sc.loc[:,"marginal price @ bus"]
     sc["capacity_usage"] = sc.loc[:,"p"] / sc.loc[:,"volume_bid"]
+    sc["valid"] = True
 
-    # checks
-    if not suppress_warnings:
-        if abs(sc["sp - mp"].values[0]) > 1: # diff of marginal price at bus and supply price
-            loggger.warning(f"Warning: Supply price differs from market clearing price by {sc['sp - mp'].values[0]}; supply_price: {supply.mc_final[sc.index].iloc[0]}, marginal_price @ bus: {mp} (timestep {timestep})")
-        if sc["capacity_usage"].values[0] > 0.999: # check capacity usage
+    ### checks
+    # diff of marginal price at bus and supply price
+    if abs(sc["sp - mp"].values[0]) > 1: 
+        sc["valid"] = False
+        if not suppress_warnings:
+            logger.warning(f"Warning: Supply price differs from market clearing price by {sc['sp - mp'].values[0]}; supply_price: {supply.mc_final[sc.index].iloc[0]}, marginal_price @ bus: {mp} (timestep {timestep})")
+    
+    # check if capacity is used mpre than 0.999
+    if sc["capacity_usage"].values[0] > 0.999:
+        sc["valid"] = False
+        if not suppress_warnings:
             logger.warning(f"Warning: Marginal generator uses full capacity {sc['capacity_usage'].values[0]} (timestep {timestep})")    
-        p_s = supply[supply.p > th_p].sort_values(by="mc_final", ascending=True)[:supply_closest.index[0]].p.sum()
-        p_s_true = n.statistics.supply(bus_carrier="AC", aggregate_time=False)[timestep].sum()
-        if (p_s - p_s_true) > 10:
-            logger.warning(f"Warning: Supply does not match the total supply {p_s} != {p_s_true} (timestep {timestep})")  
+    
+    # check if generation is less than 1e-3
+    if sc["capacity_usage"].values[0] < 1e-3: 
+        sc["valid"] = False
+        if not suppress_warnings:
+            logger.warning(f"Warning: Marginal generator generates very low amount: amount = {sc.loc[:,"p"]}; capacity usage = {sc['capacity_usage'].values[0]} (timestep {timestep})")    
+    
+    # supply until marginal generator differs from real supply 
+    p_s = supply[supply.p > th_p].sort_values(by="mc_final", ascending=True)[:supply_closest.index[0]].p.sum()
+    p_s_true = n.statistics.supply(bus_carrier="AC", aggregate_time=False)[timestep].sum()
+    if abs(p_s - p_s_true) > 10: 
+        sc["valid"] = False
+        if not suppress_warnings:
+            logger.warning(f"Warning: Supply until marginal generator does not match the total supply {p_s} != {p_s_true} (timestep {timestep})")          
+    
+    # demand until least price taker differs from real demand
+    d_s = demand[demand.p > th_p].sort_values(by="bidding_price", ascending=True)[:demand_closest.index[0]].p.sum()
+    d_s_true = n.statistics.withdrawal(bus_carrier="AC", aggregate_time=False)[timestep].sum()
+    if abs(d_s - d_s_true) > 10: 
+        sc["valid"] = False
+        if not suppress_warnings:
+            logger.warning(f"Warning: Demand until least price taker does not match the total demand {d_s} != {d_s_true} (timestep {timestep})")  
 
+    # check if supply and demand are equal
+    if abs(p_s_true - d_s_true) > 10:
+        sc["valid"] = False
+        if not suppress_warnings:
+            logger.warning(f"Warning: Supply until marginal gen and demand until least price taker differs by {abs(s_true - d_true)} (timestep {timestep})")  
+
+
+    # check if mg is the one with the highest mc which is running (what is running?) with tolerance
+    
     dc = demand_closest.copy()   
     dc["bus"] = bus[0]
     dc["timestep"] = timestep
@@ -678,6 +721,7 @@ def price_setter(n, bus, timestep, co2_add_on=False, suppress_warnings=False):
     dc["capacity_usage"] = dc.loc[:,"p"] / dc.loc[:,"volume_demand"]
     
     return sc, dc
+
 
 if __name__ == "__main__":
     if "snakemake" not in globals():
@@ -800,8 +844,8 @@ if __name__ == "__main__":
         ask[year] = get_all_demand_prices(n, bus)
 
     # save as pickle
-    path_s = snakemake.output.pricing + '/bid.pkl'
-    path_d = snakemake.output.pricing + '/ask.pkl'
+    path_bid = snakemake.output.pricing + '/bid.pkl'
+    path_ask = snakemake.output.pricing + '/ask.pkl'
     with open(path_bid, 'wb') as file:
         pickle.dump(bid, file)
     with open(path_ask, 'wb') as file:
