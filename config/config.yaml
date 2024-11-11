@@ -4,11 +4,12 @@
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
-  prefix: 20241025_ptes_cost
+  prefix: 20241108-OneNode-DownstreamVsUpstream-No_min_part_load
 
   name:
   # - CurrentPolicies
-  - KN2045_Bal_v4
+   - KN2045_Bal_v4
+   - KN2045_Bal_v4_upstream
   # - KN2045_Elec_v4
   # - KN2045_H2_v4
   # - KN2045plus_EasyRide
@@ -62,7 +63,7 @@ scenario:
   ll:
   - vopt
   clusters:
-  - 27 #current options: 27, 49
+  - 1 #current options: 27, 49
   opts:
   - ''
   sector_opts:
@@ -74,6 +75,7 @@ scenario:
   - 2035
   - 2040
   - 2045
+  # - 2050
 
 existing_capacities:
   grouping_years_power: [1920, 1950, 1955, 1960, 1965, 1970, 1975, 1980, 1985, 1990, 1995, 2000, 2005, 2010, 2015, 2020]
@@ -82,7 +84,8 @@ existing_capacities:
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#countries
 # Germany plus 12 "Stromnachbarn"
-countries: ['AT', 'BE', 'CH', 'CZ', 'DE', 'DK', 'FR', 'GB', 'LU', 'NL', 'NO', 'PL', 'SE', 'ES', 'IT']
+countries: 
+  - DE
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#snapshots
 snapshots:
@@ -199,23 +202,23 @@ clustering:
   # fw = fw.div(fw.min()).round()
   # fw["ES"] = 1
   # print(fw.div(fw.sum()).subtract(5e-5).round(4).to_dict().__repr__().replace(",","\n"))
-  focus_weights:
-  # 27 nodes: 8 for Germany, 3 for Italy, 2 each for Denmark, UK and Spain, 1 per each of other 10 "Stromnachbarn"
-    'DE': 0.2966
-    'AT': 0.0370
-    'BE': 0.0370
-    'CH': 0.0370
-    'CZ': 0.0370
-    'DK': 0.0741
-    'FR': 0.0370
-    'GB': 0.0741
-    'LU': 0.0370
-    'NL': 0.0370
-    'NO': 0.0370
-    'PL': 0.0370
-    'SE': 0.0370
-    'ES': 0.0741
-    'IT': 0.1111
+  # focus_weights:
+  # # 27 nodes: 8 for Germany, 3 for Italy, 2 each for Denmark, UK and Spain, 1 per each of other 10 "Stromnachbarn"
+  #   'DE': 0.2966
+  #   'AT': 0.0370
+  #   'BE': 0.0370
+  #   'CH': 0.0370
+  #   'CZ': 0.0370
+  #   'DK': 0.0741
+  #   'FR': 0.0370
+  #   'GB': 0.0741
+  #   'LU': 0.0370
+  #   'NL': 0.0370
+  #   'NO': 0.0370
+  #   'PL': 0.0370
+  #   'SE': 0.0370
+  #   'ES': 0.0741
+  #   'IT': 0.1111
   # high spatial resolution: change clusters to 49
   # 49 nodes: 30 for Germany, 3 for Italy, 2 each for Denmark, UK and Spain, 1 per each of other 10 "Stromnachbarn"
     # 'DE': 0.6124
@@ -234,7 +237,7 @@ clustering:
     # 'ES': 0.0408
     # 'IT': 0.0612
   temporal:
-    resolution_sector: 365H
+    resolution_sector: 3H
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#co2-budget
 co2_budget:
@@ -247,7 +250,7 @@ co2_budget:
   2050: 0.000 # climate-neutral by 2050
 
 wasserstoff_kernnetz:
-  enable: true
+  enable: false
   reload_locations: false
   divide_pipes: true
   pipes_segment_length: 10
@@ -298,9 +301,9 @@ sector:
   regional_methanol_demand: true  #set to true if regional CO2 constraints needed
   regional_oil_demand: true  #set to true if regional CO2 constraints needed
   regional_coal_demand: true  #set to true if regional CO2 constraints needed
-  gas_network: false
+  gas_network: false 
   regional_gas_demand: true
-  H2_retrofit: true
+  H2_retrofit: false
   biogas_upgrading_cc: true
   biomass_to_liquid: true
   biomass_to_liquid_cc: true
@@ -339,6 +342,8 @@ sector:
     2040: 0.25
     2045: 0.1
     2050: 0.0
+  electricity_distribution_grid: false
+  co2_sequestration_potential: 150
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#industry
 industry:
@@ -453,15 +458,24 @@ solving:
             2035: 1000
             2040: 1000
             2045: 1000
-      Store:
-        co2 sequestered:
-          DE:
-            2020: 0
-            2025: 0
-            2030: 10000
-            2035: 20000
-            2040: 50000
-            2045: 80000
+      # Store:
+      #   co2 sequestered:
+      #     DE:
+      #       2020: 0
+      #       2025: 0
+      #       2030: 10000
+      #       2035: 20000
+      #       2040: 50000
+      #       2045: 80000
+      # Link:
+      #   urban central resistive heater:
+      #     DE:
+      #       2020: 0
+      #       2025: 0
+      #       2030: 10000
+      #       2035: 20000
+      #       2040: 50000
+      #       2045: 80000
     limits_capacity_min:
       Generator:
         onwind:
@@ -642,16 +656,19 @@ pypsa_eur:
 
 
 co2_price_add_on_fossils:
-  2020: 25
-  2025: 60
+  2020: 0
+  2025: 0
 
 must_run_biogas:
   enable: false
   p_min_pu: 0.6
   regions: ['DE']
 
+emissions_upstream:
+  enable: false
+
 transmission_projects:
-  new_link_capacity: keep #keep or zero
+  enable: false
 
 onshore_nep_force:
   cutin_year: 2020
