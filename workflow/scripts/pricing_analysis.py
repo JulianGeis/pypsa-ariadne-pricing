@@ -675,7 +675,7 @@ def price_setter(n, bus, timestep, minimum_generation=1e-3, co2_add_on=False, su
         if not suppress_warnings:
             logger.warning(f"Warning: Supply price differs from market clearing price by {sc['sp - mp'].values[0]}; supply_price: {supply.mc_final[sc.index].iloc[0]}, marginal_price @ bus: {mp} (timestep {timestep})")
     
-    # check if capacity is used mpre than 0.999
+    # check if capacity is used more than 0.999
     if sc["capacity_usage"].values[0] > 0.999:
         sc["valid"] = False
         if not suppress_warnings:
@@ -687,27 +687,28 @@ def price_setter(n, bus, timestep, minimum_generation=1e-3, co2_add_on=False, su
         if not suppress_warnings:
             logger.warning(f"Warning: Marginal generator generates very low amount: amount = {sc.loc[:,"p"]}; capacity usage = {sc['capacity_usage'].values[0]} (timestep {timestep})")    
     
-    # supply until marginal generator differs from real supply 
-    p_s = supply[supply.p > th_p].sort_values(by="mc_final", ascending=True)[:supply_closest.index[0]].p.sum()
+    # supply until marginal generator differs from real supply (with tolerance) 
+    # p_s = supply[supply.p > th_p].sort_values(by="mc_final", ascending=True)[:supply_closest.index[0]].p.sum()
+    p_s = supply[(supply.p > th_p) & (supply.mc_final <= (mp + 0.1))].p.sum()
     p_s_true = n.statistics.supply(bus_carrier="AC", aggregate_time=False)[timestep].sum()
     if abs(p_s - p_s_true) > 10: 
         sc["valid"] = False
         if not suppress_warnings:
-            logger.warning(f"Warning: Supply until marginal generator does not match the total supply {p_s} != {p_s_true} (timestep {timestep})")          
+            logger.warning(f"Warning: Supply until marginal generator plus tolerance of {0.1} €/MWh does not match the total supply {p_s} != {p_s_true} (timestep {timestep})")          
     
     # demand until least price taker differs from real demand
-    d_s = demand[demand.p > th_p].sort_values(by="bidding_price", ascending=True)[:demand_closest.index[0]].p.sum()
+    d_s = demand[(demand.p > th_p) & (demand.bidding_price >= (mp - 0.1))].p.sum()
     d_s_true = n.statistics.withdrawal(bus_carrier="AC", aggregate_time=False)[timestep].sum()
     if abs(d_s - d_s_true) > 10: 
         sc["valid"] = False
         if not suppress_warnings:
-            logger.warning(f"Warning: Demand until least price taker does not match the total demand {d_s} != {d_s_true} (timestep {timestep})")  
+            logger.warning(f"Warning: Demand until least price taker minus tolerance of {0.1} €/MWh does not match the total demand {d_s} != {d_s_true} (timestep {timestep})")  
 
     # check if supply and demand are equal
-    if abs(p_s_true - d_s_true) > 10:
+    if abs(p_s - d_s) > 10:
         sc["valid"] = False
         if not suppress_warnings:
-            logger.warning(f"Warning: Supply until marginal gen and demand until least price taker differs by {abs(s_true - d_true)} (timestep {timestep})")  
+            logger.warning(f"Warning: Supply until marginal gen ({p_s}) and demand until least price taker ({d_s})differs by {abs(p_s - d_s)} (timestep {timestep})")  
 
 
     # check if mg is the one with the highest mc which is running (what is running?) with tolerance
@@ -807,6 +808,11 @@ if __name__ == "__main__":
     tech_colors['urban decentral air heat pump'] = 'salmon'
     tech_colors['rural resistive heater'] = "indianred"
     tech_colors['rural air heat pump'] = "salmon"
+    tech_colors["H2 OCGT"] = tech_colors["H2"]
+    tech_colors["H2 retrofit OCGT"] = tech_colors["H2"]
+    tech_colors["urban central H2 retrofit CHP"] = "turquoise"
+    tech_colors["battery discharger"] = "darkgoldenrod"
+    tech_colors["urban central H2 retrofit OCGT"] = "seagreen"
     
     # calc price setter info
     networks = n_dict
@@ -817,6 +823,8 @@ if __name__ == "__main__":
         n = networks[year]
         res_s = pd.DataFrame()
         res_d = pd.DataFrame()
+        logger.info("")  # Adds a blank line to the log file
+        logger.info(f"Calculating price setter for year {year}")
         for bus in n.buses.query("carrier == 'AC'").index:
             for snapshot in n.buses_t.p.index:
                 s, d = price_setter(n, bus, str(snapshot), suppress_warnings=False)

@@ -731,7 +731,7 @@ rule pricing_analysis:
         pdc_price_taker=directory(RESULTS + "ariadne/pricing/pdc_price_taker"),
     resources:
         mem_mb=30000,
-        runtime=config_provider("solving", "runtime", default="6h"),
+        runtime="30h",
     log:
         RESULTS + "logs/pricing_analysis.log",
     script:

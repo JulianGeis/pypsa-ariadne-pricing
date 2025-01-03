@@ -956,13 +956,13 @@ def additional_functionality(n, snapshots, snakemake):
     investment_year = int(snakemake.wildcards.planning_horizons[-4:])
     constraints = snakemake.params.solving["constraints"]
 
-    # add_capacity_limits(
-    #     n, investment_year, constraints["limits_capacity_min"], "minimum"
-    # )
+    add_capacity_limits(
+        n, investment_year, constraints["limits_capacity_min"], "minimum"
+    )
 
-    # add_capacity_limits(
-    #     n, investment_year, constraints["limits_capacity_max"], "maximum"
-    # )
+    add_capacity_limits(
+        n, investment_year, constraints["limits_capacity_max"], "maximum"
+    )
 
     # add_power_limits(n, investment_year, constraints["limits_power_max"])
 
@@ -1002,5 +1002,5 @@ def additional_functionality(n, snapshots, snakemake):
         limit_countries = constraints["co2_budget_national"][investment_year]
         emissions_upstream(n, limit_countries, snakemake)
 
-    if investment_year == 2020:
-        adapt_nuclear_output(n)
+    # if investment_year == 2020:
+    #     adapt_nuclear_output(n)
