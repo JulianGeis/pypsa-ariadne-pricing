@@ -667,25 +667,23 @@ def price_setter(n, bus, timestep, minimum_generation=1e-3, co2_add_on=False, su
     sc["sp - mp"] = sc.loc[:,"supply_price"] - sc.loc[:,"marginal price @ bus"]
     sc["capacity_usage"] = sc.loc[:,"p"] / sc.loc[:,"volume_bid"]
     sc["valid"] = True
+    msg_s = ""
 
     ### checks
     # diff of marginal price at bus and supply price
-    if abs(sc["sp - mp"].values[0]) > 1: 
+    if abs(sc["sp - mp"].values[0]) > 0.1: 
         sc["valid"] = False
-        if not suppress_warnings:
-            logger.warning(f"Warning: Supply price differs from market clearing price by {sc['sp - mp'].values[0]}; supply_price: {supply.mc_final[sc.index].iloc[0]}, marginal_price @ bus: {mp} (timestep {timestep})")
+        msg_s = f"Warning: Supply price differs from market clearing price by {sc['sp - mp'].values[0]}; supply_price: {supply.mc_final[sc.index].iloc[0]}, marginal_price @ bus: {mp} (timestep {timestep}) \n"
     
-    # check if capacity is used more than 0.999
-    if sc["capacity_usage"].values[0] > 0.999:
+    # check if capacity is used more than 0.99
+    if sc["capacity_usage"].values[0] > 0.99:
         sc["valid"] = False
-        if not suppress_warnings:
-            logger.warning(f"Warning: Marginal generator uses full capacity {sc['capacity_usage'].values[0]} (timestep {timestep})")    
+        msg_s += f"Warning: Marginal generator uses full capacity {sc['capacity_usage'].values[0]} (timestep {timestep}) \n" 
     
-    # check if generation is less than 1e-3
-    if sc["capacity_usage"].values[0] < 1e-3: 
+    # check if generation is less than 1e-2
+    if sc["capacity_usage"].values[0] < 1e-2: 
         sc["valid"] = False
-        if not suppress_warnings:
-            logger.warning(f"Warning: Marginal generator generates very low amount: amount = {sc.loc[:,"p"]}; capacity usage = {sc['capacity_usage'].values[0]} (timestep {timestep})")    
+        msg_s += f"Warning: Marginal generator generates very low amount: amount = {sc.loc[:,'p']}; capacity usage = {sc['capacity_usage'].values[0]} (timestep {timestep}) \n"
     
     # supply until marginal generator differs from real supply (with tolerance) 
     # p_s = supply[supply.p > th_p].sort_values(by="mc_final", ascending=True)[:supply_closest.index[0]].p.sum()
@@ -693,23 +691,7 @@ def price_setter(n, bus, timestep, minimum_generation=1e-3, co2_add_on=False, su
     p_s_true = n.statistics.supply(bus_carrier="AC", aggregate_time=False)[timestep].sum()
     if abs(p_s - p_s_true) > 10: 
         sc["valid"] = False
-        if not suppress_warnings:
-            logger.warning(f"Warning: Supply until marginal generator plus tolerance of {0.1} €/MWh does not match the total supply {p_s} != {p_s_true} (timestep {timestep})")          
-    
-    # demand until least price taker differs from real demand
-    d_s = demand[(demand.p > th_p) & (demand.bidding_price >= (mp - 0.1))].p.sum()
-    d_s_true = n.statistics.withdrawal(bus_carrier="AC", aggregate_time=False)[timestep].sum()
-    if abs(d_s - d_s_true) > 10: 
-        sc["valid"] = False
-        if not suppress_warnings:
-            logger.warning(f"Warning: Demand until least price taker minus tolerance of {0.1} €/MWh does not match the total demand {d_s} != {d_s_true} (timestep {timestep})")  
-
-    # check if supply and demand are equal
-    if abs(p_s - d_s) > 10:
-        sc["valid"] = False
-        if not suppress_warnings:
-            logger.warning(f"Warning: Supply until marginal gen ({p_s}) and demand until least price taker ({d_s})differs by {abs(p_s - d_s)} (timestep {timestep})")  
-
+        msg_s += f"Warning: Supply until marginal generator plus tolerance of {0.1} €/MWh does not match the total supply {p_s} != {p_s_true} (timestep {timestep}) \n"      
 
     # check if mg is the one with the highest mc which is running (what is running?) with tolerance
     
@@ -720,6 +702,43 @@ def price_setter(n, bus, timestep, minimum_generation=1e-3, co2_add_on=False, su
     dc["marginal price @ bus"] = mp
     dc["bp - mp"] = dc.loc[:,"bidding_price"] - dc.loc[:,"marginal price @ bus"]
     dc["capacity_usage"] = dc.loc[:,"p"] / dc.loc[:,"volume_demand"]
+    dc["valid"] = True
+    msg_d = ""
+
+    ### checks
+    # diff of marginal price at bus and supply price
+    if abs(dc["bp - mp"].values[0]) > 0.1: 
+        dc["valid"] = False
+        msg_d = f"Warning: Demand price differs from market clearing price by {dc['bp - mp'].values[0]}; demand_price: {demand.bidding_price[dc.index].iloc[0]}, marginal_price @ bus: {mp} (timestep {timestep}) \n"
+    
+    # check if capacity is used more than 0.99
+    if dc["capacity_usage"].values[0] > 0.99:
+        dc["valid"] = False
+        msg_d += f"Warning: Marginal consumer uses full capacity {dc['capacity_usage'].values[0]} (timestep {timestep})\n"  
+    
+    # check if consumption is less than 1e-2
+    if dc["capacity_usage"].values[0] < 1e-2: 
+        dc["valid"] = False
+        msg_d += f"Warning: Marginal consumer consumes very low amount: amount = {dc.loc[:,'p']}; capacity usage = {dc['capacity_usage'].values[0]} (timestep {timestep})\n"
+
+    # demand until least price taker differs from real demand
+    d_s = demand[(demand.p > th_p) & (demand.bidding_price >= (mp - 0.1))].p.sum()
+    d_s_true = n.statistics.withdrawal(bus_carrier="AC", aggregate_time=False)[timestep].sum()
+    if abs(d_s - d_s_true) > 10: 
+        dc["valid"] = False
+        msg_d += f"Warning: Demand until least price taker minus tolerance of {0.1} €/MWh does not match the total demand {d_s} != {d_s_true} (timestep {timestep}) \n"
+
+    if not suppress_warnings:
+        if not (s["valid"].any() or  d["valid"].any()):
+            logger.warning(f"Warning: No valid price setting technology found for bus {bus} at timestep {timestep}")
+            logger.warning(msg_s)
+            logger.warning(msg_d)
+
+    # check if supply and demand are equal
+    if abs(p_s - d_s) > 10:
+        if not suppress_warnings:
+            logger.warning(f"Warning: Supply until marginal gen ({p_s}) and demand until least price taker ({d_s})differs by {abs(p_s - d_s)} (timestep {timestep})")  
+
     
     return sc, dc
 
@@ -869,7 +888,14 @@ if __name__ == "__main__":
     # plotting - 3 cases
     for year in planning_horizons:
 
-        ts = ["2019-01-11 15:00:00", "2019-08-05 18:00:00",  "2019-06-02 12:00:00"] 
+        n = networks[2020]
+        if "2019-01-01 00:00:00" in  n.snapshots:
+            ts = ["2019-01-11 15:00:00", "2019-08-05 18:00:00",  "2019-06-02 12:00:00"] 
+        elif "2013-01-01 00:00:00" in  n.snapshots:
+            ts = ["2013-02-18 15:00:00", "2013-12-31 15:00:00", "2013-07-07 12:00:00"]
+        else: 
+            ts = n.snapshots[[204, 995, 1500]]
+
         all_supply_handles_labels = {}
         num_subplots = 3
         fig, axes = plt.subplots(3, 1, figsize=(8, 3*6))

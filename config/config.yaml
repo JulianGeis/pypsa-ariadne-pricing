@@ -4,7 +4,7 @@
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
-  prefix: 20250103-Pricing-Update
+  prefix: 20250108-Pricing-Update
 
   name:
   # - CurrentPolicies
@@ -87,27 +87,27 @@ existing_capacities:
 countries: 
   - DE
 
-# docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#snapshots
-snapshots:
-  start: "2019-01-01"
-  end: "2020-01-01"
-  inclusive: 'left'
+# # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#snapshots
+# snapshots:
+#   start: "2019-01-01"
+#   end: "2020-01-01"
+#   inclusive: 'left'
 
-atlite:
-  default_cutout: europe-2019-sarah3-era5
-  cutouts:
-    europe-2019-sarah3-era5:
-      module: [sarah, era5] # in priority order
-      x: [-12., 42.]
-      y: [33., 72]
-      dx: 0.3
-      dy: 0.3
-      time: ['2019', '2019']
+# atlite:
+#   default_cutout: europe-2019-sarah3-era5
+#   cutouts:
+#     europe-2019-sarah3-era5:
+#       module: [sarah, era5] # in priority order
+#       x: [-12., 42.]
+#       y: [33., 72]
+#       dx: 0.3
+#       dy: 0.3
+#       time: ['2019', '2019']
 
 
 renewable:
   onwind:
-    cutout: europe-2019-sarah3-era5
+    cutout: europe-2013-sarah3-era5
     resource:
       smooth: false  #this is false until correction to onshore wind speeds from GWA implemented
       #based on Vestas_V112_3MW, but changing hub_height from 80m with time
@@ -130,7 +130,7 @@ renewable:
   offwind-ac:
     capacity_per_sqkm: 6
     landfall_length: 30
-    cutout: europe-2019-sarah3-era5
+    cutout: europe-2013-sarah3-era5
     resource:
       smooth: true
       #based on NREL_ReferenceTurbine_2020ATB_5.5MW, but changing hub_height from 80m with time
@@ -153,7 +153,7 @@ renewable:
   offwind-dc:
     capacity_per_sqkm: 6
     landfall_length: 30
-    cutout: europe-2019-sarah3-era5
+    cutout: europe-2013-sarah3-era5
     resource:
       smooth: true
       #based on NREL_ReferenceTurbine_2020ATB_5.5MW, but changing hub_height from 80m with time
@@ -176,24 +176,24 @@ renewable:
   offwind-float: # disabled at the moment
     landfall_length: 30
     capacity_per_sqkm: 6
-    cutout: europe-2019-sarah3-era5
+    cutout: europe-2013-sarah3-era5
   solar:
-    cutout: europe-2019-sarah3-era5
+    cutout: europe-2013-sarah3-era5
     correction_factor: 0.918 # scaling to Abbildung 36 of https://www.ise.fraunhofer.de/de/veroeffentlichungen/studien/aktuelle-fakten-zur-photovoltaik-in-deutschland.html
   solar-hsat:
-    cutout: europe-2019-sarah3-era5
+    cutout: europe-2013-sarah3-era5
     correction_factor: 0.918 # scaling to Abbildung 36 of https://www.ise.fraunhofer.de/de/veroeffentlichungen/studien/aktuelle-fakten-zur-photovoltaik-in-deutschland.html
   hydro:
-    cutout: europe-2019-sarah3-era5
+    cutout: europe-2013-sarah3-era5
 
 lines:
   dynamic_line_rating:
-    cutout: europe-2019-sarah3-era5
+    cutout: europe-2013-sarah3-era5
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#enable
 enable:
   retrieve: false # set to false once initial data is retrieved
-  retrieve_cutout: false # set to false once initial data is retrieved
+  retrieve_cutout: true # set to false once initial data is retrieved
 clustering:
   temporal:
     resolution_sector: 3H
@@ -305,8 +305,8 @@ sector:
   min_part_load_fischer_tropsch: 0 #0.5
   min_part_load_methanolisation: 0 #0.3
   min_part_load_methanation: 0 #0.3
-  bev_dsm: true
-  bev_availability: 0.
+  bev_dsm: false
+  bev_availability: 0.5
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#industry
 industry:
@@ -593,7 +593,7 @@ pypsa_eur:
 
 
 co2_price_add_on_fossils:
-  2020: 0
+  2020: 25
   2025: 0
 
 must_run_biogas:
