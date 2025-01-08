@@ -7,7 +7,6 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import pypsa
-from _helpers import configure_logging
 from shapely.geometry import Point
 
 logger = logging.getLogger(__name__)
@@ -15,6 +14,7 @@ logger = logging.getLogger(__name__)
 paths = ["workflow/submodules/pypsa-eur/scripts", "../submodules/pypsa-eur/scripts"]
 for path in paths:
     sys.path.insert(0, os.path.abspath(path))
+from _helpers import configure_logging
 from add_electricity import load_costs
 from prepare_sector_network import lossy_bidirectional_links, prepare_costs
 
@@ -240,7 +240,19 @@ def add_wasserstoff_kernnetz(n, wkn, costs):
             overnight_cost=overnight_costs,
             carrier="H2 pipeline (Kernnetz)",
             lifetime=lifetime,
+            retrofitted=wkn_new.retrofitted.values,
         )
+
+        # add tags
+        tags = wkn_new.apply(
+            lambda row: {
+                "pci": row["pci"],
+                "ipcei": row["ipcei"],
+                "investment_costs (Mio. Euro)": row["investment_costs (Mio. Euro)"],
+            },
+            axis=1,
+        )
+        n.links.loc[names, "tags"] = tags.values.astype(str)
 
         # add reversed pipes and losses
         losses = snakemake.params.H2_transmission_efficiency
@@ -705,17 +717,15 @@ def unravel_gasbus(n, costs):
         )
 
 
-def transmission_costs_from_modified_cost_data(
-    n, costs, transmission, length_factor=1.0
-):
+def transmission_costs_from_modified_cost_data(n, costs, transmission):
     # copying the the function update_transmission_costs from add_electricity
     # slight change to the function so it works in modify_prenetwork
 
     n.lines["capital_cost"] = (
-        n.lines["length"] * length_factor * costs.at["HVAC overhead", "capital_cost"]
+        n.lines["length"] * costs.at["HVAC overhead", "capital_cost"]
     )
     n.lines["overnight_cost"] = (
-        n.lines["length"] * length_factor * costs.at["HVAC overhead", "investment"]
+        n.lines["length"] * costs.at["HVAC overhead", "investment"]
     )
 
     if n.links.empty:
@@ -735,7 +745,6 @@ def transmission_costs_from_modified_cost_data(
 
     capital_cost = (
         n.links.loc[dc_b, "length"]
-        * length_factor
         * (
             (1.0 - n.links.loc[dc_b, "underwater_fraction"])
             * costs.at[links_costs, "capital_cost"]
@@ -747,7 +756,6 @@ def transmission_costs_from_modified_cost_data(
 
     overnight_cost = (
         n.links.loc[dc_b, "length"]
-        * length_factor
         * (
             (1.0 - n.links.loc[dc_b, "underwater_fraction"])
             * costs.at[links_costs, "investment"]
@@ -760,17 +768,49 @@ def transmission_costs_from_modified_cost_data(
     n.links.loc[dc_b, "overnight_cost"] = overnight_cost
 
 
-def must_run_biogas(n, p_min_pu, regions):
+def must_run(n, params):
     """
-    Set p_min_pu for biogas generators to the specified value.
+    Set p_min_pu for links to the specified value or reset to 0 if not specified.
     """
-    logger.info(
-        f"Must-run condition enabled: Setting p_min_pu = {p_min_pu} for biogas generators."
-    )
-    links_i = n.links[
-        (n.links.carrier == "biogas") & (n.links.bus0.str.startswith(tuple(regions)))
-    ].index
-    n.links.loc[links_i, "p_min_pu"] = p_min_pu
+
+    investment_year = int(snakemake.wildcards.planning_horizons)
+    planning_horizons = snakemake.params.planning_horizons
+    i = planning_horizons.index(int(snakemake.wildcards.planning_horizons))
+    previous_investment_year = int(planning_horizons[i - 1]) if i != 0 else np.nan
+
+    # Get params for the current and previous years
+    current_params = params.get(investment_year, {})
+    previous_params = params.get(previous_investment_year, {})
+
+    # Collect all carriers and regions from the previous period
+    for region in previous_params:
+        for carrier in previous_params[region]:
+            # Check if the carrier is not in the current period
+            if region not in current_params or carrier not in current_params.get(
+                region, {}
+            ):
+                # Reset p_min_pu to 0 for this carrier in the previous region
+                logger.info(
+                    f"Must-run condition disabled: Resetting p_min_pu to 0 for {carrier} "
+                    f"in region {region} (was specified in {previous_investment_year}, but not in {investment_year})."
+                )
+                links_i = n.links[
+                    (n.links.carrier == carrier) & n.links.index.str.contains(region)
+                ].index
+                n.links.loc[links_i, "p_min_pu"] = 0
+
+    # Set p_min_pu for carriers specified in the current investment period
+    for region in current_params:
+        for carrier in current_params[region]:
+            p_min_pu = current_params[region][carrier]
+            logger.info(
+                f"Must-run condition enabled: Setting p_min_pu = {p_min_pu} for {carrier} "
+                f"in year {investment_year} and region {region}."
+            )
+            links_i = n.links[
+                (n.links.carrier == carrier) & n.links.index.str.contains(region)
+            ].index
+            n.links.loc[links_i, "p_min_pu"] = p_min_pu
 
 
 def aladin_mobility_demand(n):
@@ -1030,6 +1070,20 @@ def force_connection_nep_offshore(n, current_year):
     # Load shapes and projects
     offshore = pd.read_csv(snakemake.input.offshore_connection_points, index_col=0)
 
+    if int(snakemake.params.offshore_nep_force["delay_years"]) != 0:
+        # Modify 'Inbetriebnahmejahr' by adding the delay years for rows where 'Inbetriebnahmejahr' > 2025
+        offshore.loc[
+            offshore["Inbetriebnahmejahr"] > 2025, "Inbetriebnahmejahr"
+        ] += int(snakemake.params.offshore_nep_force["delay_years"])
+        logger.info(
+            f"Delaying NEP offshore connection points by {snakemake.params.offshore_nep_force['delay_years']} years."
+        )
+        # This is a hack s.t. for CurPol and WorstCase the 2030 projects are delayed to the 2035 period, but the later projects are ignored
+        offshore.loc[offshore["Inbetriebnahmejahr"] > 2031, "Inbetriebnahmejahr"] += 5
+        logger.info(
+            "Delaying NEP offshore connection points after 2031 by another 5 years."
+        )
+
     goffshore = gpd.GeoDataFrame(
         offshore,
         geometry=gpd.points_from_xy(offshore.lon, offshore.lat),
@@ -1175,6 +1229,63 @@ def drop_duplicate_transmission_projects(n):
     n.remove("Line", to_drop)
 
 
+def scale_capacity(n, scaling):
+    """
+    Scale the output capacity of energy system links based on predefined scaling limits.
+
+    Parameters:
+    - n: The network/model object representing the energy system.
+    - scaling: A dictionary with scaling limits structured as
+               {year: {region: {carrier: limit}}}.
+    """
+    investment_year = int(snakemake.wildcards.planning_horizons)
+    if investment_year in scaling.keys():
+        for region in scaling[investment_year].keys():
+            for carrier in scaling[investment_year][region].keys():
+                limit = scaling[investment_year][region][carrier]
+                logger.info(
+                    f"Scaling output capacity (bus1) of {carrier} in region {region} to {limit} MW"
+                )
+
+                links_i = n.links[
+                    (n.links.carrier == carrier) & n.links.index.str.contains(region)
+                ].index
+
+                installed_cap = n.links.loc[links_i].eval("p_nom * efficiency").sum()
+                if installed_cap == 0:
+                    logger.warning(
+                        f"No installed capacity for {carrier} in region {region}. Skipping adjustment."
+                    )
+                    continue
+
+                diff_cap = limit - installed_cap
+                avg_efficiency = n.links.loc[links_i, "efficiency"].mean()
+                if avg_efficiency == 0 or np.isnan(avg_efficiency):
+                    logger.warning(
+                        f"Invalid average efficiency for {carrier} in region {region}. Skipping adjustment."
+                    )
+                    continue
+
+                diff_cap_0 = diff_cap / avg_efficiency
+                p_nom_sum = n.links.loc[links_i, "p_nom"].sum()
+                if p_nom_sum == 0:
+                    logger.warning(
+                        f"Zero total p_nom for {carrier} in region {region}. Skipping adjustment."
+                    )
+                    continue
+
+                scaling_factors = n.links.loc[links_i].eval("p_nom / @p_nom_sum")
+                n.links.loc[links_i, "p_nom"] += scaling_factors * diff_cap_0
+
+                links_i_current = n.links.loc[links_i][
+                    (n.links.loc[links_i].p_nom_min != 0)
+                    & n.links.loc[links_i].p_nom_extendable
+                ].index
+                n.links.loc[links_i_current, "p_nom_min"] = n.links.loc[
+                    links_i_current, "p_nom"
+                ]
+
+
 if __name__ == "__main__":
     if "snakemake" not in globals():
         import os
@@ -1191,7 +1302,7 @@ if __name__ == "__main__":
             opts="",
             ll="vopt",
             sector_opts="none",
-            planning_horizons="2020",
+            planning_horizons="2025",
             run="KN2045_Bal_v4",
         )
 
@@ -1246,15 +1357,10 @@ if __name__ == "__main__":
         n,
         costs_loaded,
         snakemake.params.transmission_costs,
-        snakemake.params.length_factor,
     )
 
-    if snakemake.params.biogas_must_run["enable"]:
-        must_run_biogas(
-            n,
-            snakemake.params.biogas_must_run["p_min_pu"],
-            snakemake.params.biogas_must_run["regions"],
-        )
+    if snakemake.params.must_run is not None:
+        must_run(n, snakemake.params.must_run)
 
     if snakemake.params.H2_plants["enable"]:
         if snakemake.params.H2_plants["start"] <= int(
@@ -1276,5 +1382,7 @@ if __name__ == "__main__":
     drop_duplicate_transmission_projects(n)
 
     force_connection_nep_offshore(n, current_year)
+
+    scale_capacity(n, snakemake.params.scale_capacity)
 
     n.export_to_netcdf(snakemake.output.network)

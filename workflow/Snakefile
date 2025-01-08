@@ -222,7 +222,6 @@ rule modify_prenetwork:
         enable_kernnetz=config_provider("wasserstoff_kernnetz", "enable"),
         costs=config_provider("costs"),
         max_hours=config_provider("electricity", "max_hours"),
-        length_factor=config_provider("lines", "length_factor"),
         technology_occurrence=config_provider("first_technology_occurrence"),
         fossil_boiler_ban=config_provider("new_decentral_fossil_boiler_ban"),
         coal_ban=config_provider("coal_generation_ban"),
@@ -236,7 +235,7 @@ rule modify_prenetwork:
             "sector", "H2_retrofit_capacity_per_CH4"
         ),
         transmission_costs=config_provider("costs", "transmission"),
-        biogas_must_run=config_provider("must_run_biogas"),
+        must_run=config_provider("must_run"),
         clustering=config_provider("clustering", "temporal", "resolution_sector"),
         emissions_upstream=config_provider("emissions_upstream"),
         H2_plants=config_provider("electricity", "H2_plants_DE"),
@@ -251,6 +250,7 @@ rule modify_prenetwork:
         shipping_oil_efficiency=config_provider("sector", "shipping_oil_efficiency"),
         shipping_methanol_share=config_provider("sector", "shipping_methanol_share"),
         mwh_meoh_per_tco2=config_provider("sector", "MWh_MeOH_per_tCO2"),
+        scale_capacity=config_provider("scale_capacity"),
     input:
         costs_modifications="ariadne-data/costs_{planning_horizons}-modifications.csv",
         network=RESULTS
@@ -282,7 +282,7 @@ rule modify_prenetwork:
         network=RESULTS
         + "prenetworks-final/base_s_{clusters}_l{ll}_{opts}_{sector_opts}_{planning_horizons}.nc",
     resources:
-        mem_mb=1000,
+        mem_mb=4000,
     log:
         RESULTS
         + "logs/modify_prenetwork_base_s_{clusters}_l{ll}_{opts}_{sector_opts}_{planning_horizons}.log",
@@ -303,6 +303,7 @@ use rule solve_sector_network_myopic from pypsaeur with:
         custom_extra_functionality=os.path.join(
             os.path.dirname(workflow.snakefile), "scripts/additional_functionality.py"
         ),
+        energy_year=config_provider("energy", "energy_totals_year"),
     input:
         **{
             k: v
@@ -312,6 +313,7 @@ use rule solve_sector_network_myopic from pypsaeur with:
         network=RESULTS
         + "prenetworks-final/base_s_{clusters}_l{ll}_{opts}_{sector_opts}_{planning_horizons}.nc",
         co2_totals_name=resources("co2_totals.csv"),
+        energy_totals=resources("energy_totals.csv"),
 
 
 rule modify_existing_heating:
@@ -463,7 +465,7 @@ rule cluster_wasserstoff_kernnetz:
 rule download_ariadne_template:
     input:
         storage(
-            "https://github.com/iiasa/ariadne-intern-workflow/raw/main/attachments/2024-08-13_template_Ariadne.xlsx",
+            "https://github.com/iiasa/ariadne-intern-workflow/raw/main/attachments/2024-11-28_template_Ariadne.xlsx",
             keep_local=True,
         ),
     output:
@@ -474,16 +476,16 @@ rule download_ariadne_template:
 
 rule export_ariadne_variables:
     params:
-        length_factor=config_provider("lines", "length_factor"),
         planning_horizons=config_provider("scenario", "planning_horizons"),
         hours=config_provider("clustering", "temporal", "resolution_sector"),
         costs=config_provider("costs"),
+        config_industry=config_provider("industry"),
         energy_totals_year=config_provider("energy", "energy_totals_year"),
         co2_price_add_on_fossils=config_provider("co2_price_add_on_fossils"),
         co2_sequestration_cost=config_provider("sector", "co2_sequestration_cost"),
         post_discretization=config_provider("solving", "options", "post_discretization"),
         NEP_year=config_provider("costs", "NEP"),
-        transmission_projects=config_provider("transmission_projects", "enable"),
+        NEP_transmission=config_provider("costs", "transmission"),
     input:
         template=resources("template_ariadne_database.xlsx"),
         industry_demands=expand(
@@ -523,7 +525,7 @@ rule export_ariadne_variables:
         exported_variables_full=RESULTS + "ariadne/exported_variables_full.xlsx",
     resources:
         # A heuristic to assign more memory for larger networks. Should probably be quadratic??
-        mem_mb=(lambda w: 320 * int(config_provider("scenario", "clusters")(w)[0])),
+        mem_mb=(lambda w: 400 * int(config_provider("scenario", "clusters")(w)[0])),
     log:
         RESULTS + "logs/export_ariadne_variables.log",
     script:
@@ -564,8 +566,11 @@ rule plot_ariadne_variables:
         # investment_energy_supply=RESULTS + "ariadne/investment_energy_supply.png",
         elec_val_2020=RESULTS + "ariadne/elec_val_2020.png",
         trade=RESULTS + "ariadne/trade.png",
-        # NEP_plot=RESULTS + "ariadne/NEP_plot.png",
-        # NEP_Trassen_plot=RESULTS + "ariadne/NEP_Trassen_plot.png",
+        NEP_plot=RESULTS + "ariadne/NEP_plot.png",
+        NEP_Trassen_plot=RESULTS + "ariadne/NEP_Trassen_plot.png",
+        transmission_investment_csv=RESULTS + "ariadne/transmission_investment.csv",
+        trassenlaenge_csv=RESULTS + "ariadne/trassenlaenge.csv",
+        Kernnetz_Investment_plot=RESULTS + "ariadne/Kernnetz_Investment_plot.png",
     log:
         RESULTS + "logs/plot_ariadne_variables.log",
     script:
@@ -654,7 +659,7 @@ rule plot_ariadne_report:
         post_discretization=config_provider("solving", "options", "post_discretization"),
         NEP_year=config_provider("costs", "NEP"),
         hours=config_provider("clustering", "temporal", "resolution_sector"),
-        transmission_projects=config_provider("transmission_projects", "enable"),
+        NEP_transmission=config_provider("costs", "transmission"),
     input:
         networks=expand(
             RESULTS
@@ -673,19 +678,27 @@ rule plot_ariadne_report:
             **config["scenario"],
             allow_missing=True,
         ),
+        costs=expand(
+            resources("costs_{planning_horizons}.csv"),
+            **config["scenario"],
+            allow_missing=True,
+        ),
     output:
         elec_price_duration_curve=RESULTS
         + "ariadne/report/elec_price_duration_curve.png",
         elec_price_duration_hist=RESULTS + "ariadne/report/elec_price_duration_hist.png",
+        backup_capacity=RESULTS + "ariadne/report/backup_capacity.png",
+        backup_generation=RESULTS + "ariadne/report/backup_generation.png",
+        elec_prices_spatial_de=RESULTS + "ariadne/report/elec_prices_spatial_de.png",
         results=directory(RESULTS + "ariadne/report"),
         elec_transmission=directory(RESULTS + "ariadne/report/elec_transmission"),
         h2_transmission=directory(RESULTS + "ariadne/report/h2_transmission"),
         co2_transmission=directory(RESULTS + "ariadne/report/co2_transmission"),
         elec_balances=directory(RESULTS + "ariadne/report/elec_balance_timeseries"),
-        heat_balances=directory(RESULTS + "ariadne/report/heat_balance_timeseries"),
+        heat_balances=directory(RESULTS + "ariadne/report/heat_balance_timeseries"), 
         nodal_balances=directory(RESULTS + "ariadne/report/balance_timeseries_2045"),
     resources:
-        mem_mb=10000,
+        mem_mb=30000,
     log:
         RESULTS + "logs/plot_ariadne_report.log",
     script:

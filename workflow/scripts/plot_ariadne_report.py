@@ -2,10 +2,13 @@
 import logging
 import os
 import sys
+
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
-from itertools import compress
+from datetime import datetime
+from itertools import compress, islice
 from multiprocessing import Pool
 
+import cartopy
 import cartopy.crs as ccrs
 import geopandas as gpd
 import matplotlib.dates as mdates
@@ -19,10 +22,11 @@ from pypsa.plot import add_legend_lines
 path = "../submodules/pypsa-eur/scripts"
 sys.path.insert(1, os.path.abspath(path))
 from _helpers import configure_logging, set_scenario_config
-from export_ariadne_variables import hack_transmission_projects, get_discretized_value
+from export_ariadne_variables import get_discretized_value, process_postnetworks
 from plot_power_network import load_projection
 from prepare_sector_network import prepare_costs
 from plot_summary import preferred_order, rename_techs
+from prepare_sector_network import prepare_costs
 from pypsa.plot import add_legend_circles, add_legend_lines, add_legend_patches
 
 logger = logging.getLogger(__name__)
@@ -50,6 +54,42 @@ CARRIER_GROUPS = {
     # "CO2 stored": "co2 stored",
     # "methane": "gas",
 }
+
+backup_techs = {
+    "Gas": [
+        "OCGT",
+        "CCGT",
+        "biogas",
+        "urban central gas CHP",
+        "urban central gas CHP CC",
+    ],
+    "Öl": ["oil", "urban central oil CHP"],
+    "Kohle": ["lignite", "coal", "urban central coal CHP", "urban central lignite CHP"],
+    "Wasserkraft": ["PHS", "hydro"],
+    "Batterie": ["battery discharger", "home battery discharger"],
+    "Wasserstoff": [
+        "H2 OCGT",
+        "H2 retrofit OCGT",
+        "urban central H2 CHP",
+        "urban central H2 retrofit CHP",
+    ],
+    "Müllverbrennung": ["waste CHP", "waste CHP CC"],
+    "Biomasse": [
+        "solid biomass",
+        "urban central solid biomass CHP",
+        "urban central solid biomass CHP CC",
+    ],
+}
+
+vre_gens = [
+    "onwind",
+    "offwind-ac",
+    "offwind-dc",
+    "solar",
+    "solar-hsat",
+    "solar rooftop",
+    "ror",
+]
 
 year_colors = [
     "dimgrey",
@@ -80,6 +120,8 @@ markers = [
 ]
 
 date_format = "%Y-%m-%d %H:%M:%S"
+reduced_date_format = "%Y-%m-%d"
+
 
 resistive_heater = [
     "urban central resistive heater",
@@ -158,6 +200,150 @@ electricity_imports = [
     "DC",
 ]
 
+carriers_in_german = {
+    "DC": "Gleichstrom",
+    "AC": "Wechselstrom",
+    "hydro": "Wasserkraft (Reservoir & Damm)",
+    "offwind-ac": "Offshore-Wind (AC)",
+    "offwind-dc": "Offshore-Wind (DC)",
+    "solar": "Solar",
+    "solar-hsat": "Solar (HSAT)",
+    "onwind": "Onshore-Wind",
+    "PHS": "Pumpspeicherkraftwerk",
+    "ror": "Laufwasserkraft",
+    "": "",
+    "lignite": "Braunkohle",
+    "coal": "Steinkohle",
+    "oil": "Öl",
+    "uranium": "Uran",
+    "none": "keine",
+    "co2": "CO2",
+    "co2 stored": "CO2 gespeichert",
+    "co2 sequestered": "CO2 sequestriert",
+    "gas": "Gas",
+    "H2": "Wasserstoffspeicher",
+    "battery": "Batteriespeicher",
+    "EV battery": "Elektrofahrzeug-Batterie",
+    "urban central heat": "Zentrale städtische Heizung",
+    "urban central water tanks": "Zentrale städtische Wassertanks",
+    "urban central solar thermal": "Zentrale städtische Solarthermie",
+    "biogas": "Biogas",
+    "solid biomass": "Biomasse",
+    "methanol": "Methanol",
+    "home battery": "Hausbatterie",
+    "rural heat": "Ländliche Wärme",
+    "rural solar thermal": "Ländliche Solarthermie",
+    "rural water tanks": "Ländliche Wassertanks",
+    "urban decentral heat": "Dezentrale städtische Heizung",
+    "urban decentral solar thermal": "Dezentrale städtische Solarthermie",
+    "urban decentral water tanks": "Dezentrale städtische Wassertanks",
+    "oil primary": "Primäröl",
+    "solar rooftop": "Solar-Dach",
+    "urban central heat vent": "Zentrale städtische Wärmeentlüftung",
+    "gas primary": "Primärgas",
+    "solid biomass for industry": "Biomasse (Industrie)",
+    "shipping oil": "Schiffsöl",
+    "agriculture machinery oil": "Landwirtschaftsmaschinenöl",
+    "naphtha for industry": "Naphtha für die Industrie",
+    "land transport oil": " Öl (Transport)",
+    "kerosene for aviation": "Kerosin für die Luftfahrt",
+    "non-sequestered HVC": "Nicht-sequestriertes HVC",
+    "shipping methanol": "Methanol für Schifffahrt",
+    "gas for industry": "Gas (Industrie)",
+    "low voltage": "Niederspannung",
+    "industry methanol": "Methanol (Industrie)",
+    "coal for industry": "Kohle (Industrie)",
+    "process emissions": "Prozessemissionen",
+    "industry electricity": "Industrieelektrizität",
+    "low-temperature heat for industry": "Niedertemperaturwärme (Industrie)",
+    "agriculture electricity": "Landwirtschaftliche Elektrizität",
+    "electricity": "Elektrizität",
+    "land transport EV": "Elektrofahrzeuge (Transport)",
+    "agriculture heat": "Landwirtschaftliche Wärme",
+    "urban central air heat pump": "Zentrale städtische Luftwärmepumpe",
+    "electricity distribution grid": "Stromverteilungsnetz",
+    "battery charger": "Batterie Laden",
+    "waste CHP": "Müll-KWK",
+    "urban central water tanks discharger": "Entladung zentraler städtischer Wassertanks",
+    "rural water tanks discharger": "Entladung ländlicher Wassertanks",
+    "urban decentral biomass boiler": "Dezentrale städtische Biomassekessel",
+    "BEV charger": "E-Fahrzeug Laden",
+    "rural ground heat pump": "Erdwärmepumpe",
+    "Fischer-Tropsch": "Fischer-Tropsch",
+    "urban decentral water tanks discharger": "Entladung dezentraler städtischer Wassertanks",
+    "urban central gas CHP": "Gas-KWK",
+    "Sabatier": "Sabatier-Prozess",
+    "gas compressing": "Gasverdichtung",
+    "home battery charger": "Hausbatterie Laden",
+    "battery discharger": "Batterie Entladung",
+    "H2 pipeline retrofitted": "Nachgerüstete Wasserstoffpipeline",
+    "rural resistive heater": "Ländlicher Widerstandsheizer",
+    "urban central water tanks charger": "Ladung zentraler städtischer Wassertanks",
+    "urban central solid biomass CHP CC": "Biomasse-KWK mit CO2-Abscheidung",
+    "rural air heat pump": "Ländliche Luftwärmepumpe",
+    "DAC": "Direkte CO2-Abscheidung",
+    "urban decentral air heat pump": "Dezentrale städtische Luftwärmepumpe",
+    "waste CHP CC": "Müll-KWK mit CO2-Abscheidung",
+    "biomass to liquid CC": "Biomasse zu Flüssigkeit mit CO2-Abscheidung",
+    "HVC to air": "HVC in die Luft",
+    "methanolisation": "Methanolisation",
+    "gas for industry CC": "Gas mit CO2-Abscheidung (Industrie)",
+    "H2 pipeline": "Wasserstoffpipeline",
+    "solid biomass for industry CC": "Biomasse mit CO2-Abscheidung (Industrie)",
+    "urban decentral gas boiler": "Dezentrale städtische Gaskessel",
+    "urban central gas CHP CC": "Gas-KWK mit CO2-Abscheidung",
+    "rural gas boiler": "Ländlicher Gaskessel",
+    "process emissions CC": "Prozessemissionen mit CO2-Abscheidung",
+    "urban decentral water tanks charger": "Ladung dezentraler städtischer Wassertanks",
+    "biogas to gas CC": "Biogas zu Gas mit CO2-Abscheidung",
+    "urban decentral resistive heater": "Dezentrale städtische Widerstandsheizer",
+    "biogas to gas": "Biogas zu Gas",
+    "OCGT": "Gas (OCGT)",
+    "urban central solid biomass CHP": "Biomasse-KWK",
+    "urban central gas boiler": "Zentraler städtischer Gaskessel",
+    "urban central resistive heater": "Zentraler städtischer Widerstandsheizer",
+    "oil refining": "Ölraffinierung",
+    "rural biomass boiler": "Ländlicher Biomassekessel",
+    "SMR": "Dampfreformierung",
+    "biomass to liquid": "Biomasse zu Flüssigkeit",
+    "rural water tanks charger": "Ladung ländlicher Wassertanks",
+    "home battery discharger": "Hausbatterie Entladung",
+    "H2 Store": "Wasserstoffspeicher",
+    "renewable oil": "Erneuerbares Öl",
+    "renewable gas": "Erneuerbares Gas",
+    "CCGT": "Gas (CCGT)",
+    "nuclear": "Kernenergie",
+    "gas CHP": "Gas-KWK",
+    "gas CHP CC": "Gas KWK mit CO2-Abscheidung",
+    "urban central coal CHP": "Steinkohle-KWK",
+    "Electricity trade": "Stromhandel",
+    "urban central gas CHP": "Gas-KWK",
+    "urban central biomass CHP": " Biomasse-KWK",
+    "biomass CHP": "Biomasse-KWK",
+    "air heat pump": "Luftwärmepumpe",
+    "Electricity load": "Elektrizitätslast",
+    "methanolisation": "Methanolisierung",
+    "resistive heater": "Widerstandsheizer",
+    "gas boiler": "Gaskessel",
+    "H2 Electrolysis": "Elektrolyse",
+    "H2 Fuel Cell": "Brennstoffzelle (Strom)",
+    "H2 for industry": "H2 für Industrie",
+    "H2 OCGT": "Wasserstoff (OCGT)",
+    "H2 CHP": "H2 KWK",
+    "land transport fuel cell": "Brennstoffzelle (Verkehr)",
+    "other": "Sonstige",
+    "SMR CC": "Dampfreformierung mit CCS",
+    "H2 pipeline (new)": "H2 Pipeline (Neubau)",
+    "H2 pipeline (repurposed)": "H2 Pipeline (Umstellung)",
+    "H2 pipeline (Kernnetz)": "H2 Pipeline (Kernnetz)",
+    "heat pump": "Wärmepumpe",
+    "urban central H2 CHP": "Wasserstoff-KWK",
+    "urban central H2 retrofit CHP": "Wasserstoff-KWK (Umrüstung)",
+    "urban central oil CHP": "Öl-KWK",
+    "urban central lignite CHP": "Braunkohle-KWK",
+    "H2 retrofit OCGT": "Wasserstoff (OCGT;Umrüstung)",
+}
+
 
 ####### functions #######
 def get_condense_sum(df, groups, groups_name, return_original=False):
@@ -205,10 +391,11 @@ def plot_nodal_balance(
     plot_loads=True,
     resample=None,
     nice_names=False,
+    german_carriers=False,
     threshold=1e-3,  # in GWh
     condense_groups=None,
     condense_names=None,
-    ylabel= "total electricity balance [GW]",
+    ylabel="total electricity balance [GW]",
     title="Electricity balance",
 ):
 
@@ -278,7 +465,10 @@ def plot_nodal_balance(
             network.buses[network.buses.carrier.isin(carriers)].index
         ].mean(axis=1)[period]
         ax2 = lmps.plot(
-            style="--", color="black", label="lmp (mean over buses)", secondary_y=True
+            style="--",
+            color="black",
+            label="Knotenpreise (gemittelt)",
+            secondary_y=True,
         )
         ax2.grid(False)
         # set limits of secondary y-axis
@@ -291,12 +481,12 @@ def plot_nodal_balance(
                 1.5 * lmps.max(),
             ]
         )
-        ax2.legend(title="Legend for right y-axis", loc="upper right")
-        ax2.set_ylabel("lmp [€/MWh]")
+        ax2.legend(title="Legende für y-Ache (rechts)", loc="upper right")
+        ax2.set_ylabel("Knotenpreise [€/MWh]")
 
     # plot loads
     if plot_loads:
-        df_loads.plot(style=":", color="black", label="loads")
+        df_loads.plot(style=":", color="black", label="Elektrizitätslast")
 
     # explicitly filter out duplicate labels
     handles, labels = ax.get_legend_handles_labels()
@@ -305,9 +495,13 @@ def plot_nodal_balance(
     ]
     handles, labels = zip(*filtered_handles_labels)
 
-    if nice_names:
+    if nice_names & (not german_carriers):
         nice_names_dict = network.carriers.nice_name.to_dict()
         labels = [nice_names_dict.get(l, l) for l in labels]
+
+    if german_carriers:
+        german_carriers
+        labels = [carriers_in_german.get(l, l) for l in labels]
 
     # rescale the y-axis
     ax.set_ylim([1.05 * df_neg.sum(axis=1).min(), 1.05 * df_pos.sum(axis=1).max()])
@@ -317,13 +511,13 @@ def plot_nodal_balance(
         ncol=1,
         loc="upper center",
         bbox_to_anchor=(1.22 if plot_lmps else 1.13, 1.01),
-        title="Legend for left y-axis",
+        title="Legende y-Achse (links)" if plot_lmps else "Legende",
     )
 
     ax.set_ylabel(ylabel)
     ax.set_xlabel("")
     ax.set_title(
-        f"{title} (model: {model_run}, period: {start_date} - {end_date})",
+        f"{title} ({model_run})",
         fontsize=16,
         pad=15,
     )
@@ -471,6 +665,12 @@ def plot_storage(
     # Ratio of total generation of max state of charge
 
     n = network
+    n.remove("Link", n.links.index[n.links.index.str[:2] != "DE"])
+    n.remove("Store", n.stores.index[n.stores.index.str[:2] != "DE"])
+    n.remove(
+        "StorageUnit", n.storage_units.index[n.storage_units.index.str[:2] != "DE"]
+    )
+    n.remove("Generator", n.generators.index[n.generators.index.str[:2] != "DE"])
 
     # storage carriers
     st_carriers = [
@@ -479,6 +679,7 @@ def plot_storage(
         "PHS",
         "hydro",
         "H2 Store",
+        "water tank",
     ]  # "battery", "Li ion",
     # generation carriers
     carriers = [
@@ -487,6 +688,7 @@ def plot_storage(
         "PHS",
         "hydro",
         "H2",
+        "water tank charger",
     ]  # "battery discharger", "V2G",
     period = n.generators_t.p.index[
         (n.generators_t.p.index >= start_date) & (n.generators_t.p.index <= end_date)
@@ -502,6 +704,12 @@ def plot_storage(
             "gen_sum",
         ],
     )
+    ger = {
+        "hydro": "Hydro",
+        "H2 Store": "H2",
+        "water tank": "Wärmespeicher",
+    }
+    tech_colors["water tank"] = tech_colors["water tanks"]
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(9, 10), height_ratios=[1, 1.5])
 
@@ -530,14 +738,20 @@ def plot_storage(
             stor_res.loc[c, "gen_charge_cap_ratio"] = gen_sum / max_stor_cap
             stor_res.loc[c, "gen_sum"] = gen_sum
 
-        elif c in n.stores.carrier.unique().tolist():
+        else:
             # state of charge (sum over different stores at same location)
-            charge = n.stores_t.e.loc[:, n.stores.carrier == c].sum(axis=1)[period]
+            charge = n.stores_t.e.loc[:, n.stores.carrier.str.contains(c)].sum(axis=1)[
+                period
+            ]
             gen_sum = (
-                -n.links_t.p1.loc[period, n.links.carrier == carriers[i]].sum().sum()
+                -n.links_t.p1.loc[
+                    period, n.links[n.links.carrier.str.contains(carriers[i])].index
+                ]
+                .sum()
+                .sum()
             )
             max_stor_cap = n.stores.e_nom_opt[
-                n.stores[n.stores.carrier == c].index
+                n.stores[n.stores.carrier.str.contains(c)].index
             ].sum()
             stor_res.loc[c, "max_charge"] = charge.max()
             stor_res.loc[c, "gen_charge_ratio"] = gen_sum / charge.max()
@@ -545,7 +759,7 @@ def plot_storage(
             stor_res.loc[c, "gen_charge_cap_ratio"] = gen_sum / max_stor_cap
             stor_res.loc[c, "gen_sum"] = gen_sum
 
-        if c in ["battery", "EV battery", "Li ion"]:
+        if c in ["battery", "EV battery", "Li ion", "PHS"]:
             ax1.plot(
                 charge / max_stor_cap,
                 label=c,
@@ -559,7 +773,7 @@ def plot_storage(
         else:
             ax2.plot(
                 charge / max_stor_cap,
-                label=c,
+                label=ger[c],
                 color=tech_colors[c],
                 marker=markers[i],
                 markevery=[0],
@@ -567,12 +781,12 @@ def plot_storage(
                 mec="black",
             )
 
-    ax1.set_title(f"State of charge of short-term storage technologies ({model_run})")
-    ax2.set_title(
+    ax2.set_title(f"Speicherstand der Langzeitspeicher Technologiemix 2045")
+    ax1.set_title(
         f"State of charge of mid- and long-term storage technologies({model_run})"
     )
     ax1.set_ylabel("State of charge [per unit of max storage capacity]")
-    ax2.set_ylabel("State of charge [per unit of max storage capacity]")
+    ax2.set_ylabel("Speicherstand [-]")
     ax1.legend(loc="lower right")
     ax2.legend(loc="lower right")
 
@@ -593,7 +807,13 @@ def plot_price_duration_curve(
     model_run="Model run",
     regions=["DE"],
     y_lim_values=[-50, 300],
+    languange="english",
 ):
+
+    # only plot 2030 onwards
+    years = years[2:]
+    networks = dict(islice(networks.items(), 2, None))
+    year_colors = year_colors[2:]
 
     fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(8, 6))
 
@@ -618,9 +838,22 @@ def plot_price_duration_curve(
         # ax.hlines(df["lmp"].loc[df["lmp"][df["gen_cumsum_norm"] > 0.125].index[0]], 0, 1, color=year_colors[i], ls="--", lw=1)
         # ax.hlines(df["lmp"].loc[df["lmp"][df["gen_cumsum_norm"] > 0.875].index[0]], 0, 1,  color=year_colors[i], ls="--", lw =1)
 
-        ax.set_ylabel("Electricity Price [$€/MWh_{el}$")
-        ax.set_xlabel("Fraction of time [%]")
-        ax.set_title(f"Electricity price duration curves {model_run}", fontsize=16)
+        ax.set_ylabel(
+            "Strompreis [$€/MWh_{el}$]"
+            if languange == "german"
+            else "Electricity Price [$€/MWh_{el}$]"
+        )
+        ax.set_xlabel(
+            "Zeitanteil [%]" if languange == "german" else "Fraction of time [%]"
+        )
+        ax.set_title(
+            (
+                f"Strompreisdauerlinien (Modell: {model_run})"
+                if languange == "german"
+                else f"Electricity price duration curves {model_run}"
+            ),
+            fontsize=16,
+        )
         ax.legend()
         ax.grid(True)
 
@@ -677,6 +910,306 @@ def plot_price_duration_hist(
     return fig
 
 
+def plot_backup_capacity(
+    networks, tech_colors, savepath, backup_techs, vre_gens, region="DE"
+):
+
+    kwargs = {
+        "groupby": networks[2020].statistics.groupers.get_name_bus_and_carrier,
+        "nice_names": False,
+    }
+
+    df_all = pd.DataFrame()
+
+    for year in np.arange(2020, 2050, 5):
+
+        n = networks[year]
+
+        electricity_cap = (
+            n.statistics.optimal_capacity(bus_carrier=["low voltage", "AC"], **kwargs)
+            .filter(like=region)
+            .groupby(["carrier"])
+            .sum()
+            .drop(
+                ["AC", "DC", "electricity distribution grid"],
+                errors="ignore",
+            )
+        )
+
+        df = round(electricity_cap.sort_values(ascending=False) / 1e3, 2)
+        non_vre_gens = df[~df.index.isin(vre_gens)].index
+        df = df.loc[non_vre_gens]
+        df = df[df > 1e-3]
+
+        df_all = pd.concat([df_all, df], axis=1)
+
+    df_all.columns = np.arange(2020, 2050, 5)
+
+    tech_colors["coal"] = "black"
+
+    # Create figure
+    plt.figure(figsize=(20, 5))
+
+    # Track x-axis positions
+    x_positions = []
+    x_labels = []
+    x_offset = 0
+
+    df = df_all
+
+    # Plot for each group
+    for group, techs_in_group in backup_techs.items():
+        # Find matching techs in the dataframe
+        matching_techs = [tech for tech in techs_in_group if tech in df.index]
+
+        # Prepare data for this group
+        group_data = df.loc[matching_techs]
+
+        # Prepare bottom for stacking
+        bottom = np.zeros(len(group_data.columns))
+
+        # Plot each technology in the group
+        for j, tech in enumerate(matching_techs):
+            values = group_data.loc[tech].fillna(0)
+            plt.bar(
+                np.arange(len(group_data.columns)) + x_offset,
+                values,
+                1,
+                bottom=bottom,
+                label=tech,
+                color=tech_colors[tech],
+            )
+            bottom += values
+
+        # Store x-axis positions for this group
+        x_positions.append(x_offset + len(group_data.columns) / 2)
+        x_labels.append(group)
+
+        # Update x offset with extra spacing
+        x_offset += len(group_data.columns) + 1  # Add extra space between groups
+
+    plt.ylim(0, 100)
+
+    # Customize the plot
+    plt.title("Kapazität Backup-Kraftwerke (Strom)", fontsize=16)
+    plt.ylabel("MW", fontsize=12)
+
+    # Create custom x-tick labels with group names below years
+    x_ticks = np.concatenate(
+        [
+            np.arange(len(df.columns)) + i
+            for i in range(0, x_offset, len(df.columns) + 1)
+        ]
+    )
+    x_tick_labels = np.tile(df.columns, len(backup_techs))
+
+    plt.xticks(x_ticks, x_tick_labels, rotation=45)
+
+    # Add group labels below x-axis ticks
+    for pos, label in zip(x_positions, x_labels):
+        plt.text(
+            pos,
+            plt.gca().get_ylim()[0] - plt.gca().get_ylim()[1] * 0.15,
+            label,
+            horizontalalignment="center",
+            verticalalignment="top",
+            fontweight="bold",
+        )
+
+    plt.grid(axis="y")
+
+    # Replace legend labels with German names from carriers_in_german
+    handles, labels = plt.gca().get_legend_handles_labels()
+    new_labels = [
+        carriers_in_german.get(label, label) for label in labels
+    ]  # Replace labels if in dict
+    plt.legend(handles, new_labels, loc="upper center", ncol=7)
+
+    plt.tight_layout()
+    plt.savefig(savepath, bbox_inches="tight")
+
+
+def plot_backup_generation(
+    networks, tech_colors, savepath, backup_techs, vre_gens, region="DE"
+):
+
+    tech_colors["coal"] = "black"
+
+    kwargs = {
+        "groupby": networks[2020].statistics.groupers.get_name_bus_and_carrier,
+        "nice_names": False,
+    }
+
+    df_all = pd.DataFrame()
+
+    for year in np.arange(2020, 2050, 5):
+        n = networks[year]
+
+        electricity_supply_de = (
+            n.statistics.supply(bus_carrier=["low voltage", "AC"], **kwargs)
+            .filter(like=region)
+            .groupby(["carrier"])
+            .sum()
+            .drop(
+                ["AC", "DC", "electricity distribution grid"],
+                errors="ignore",
+            )
+        )
+
+        df = round(electricity_supply_de.sort_values(ascending=False) / 1e6, 2)
+        non_vre_gens = df[~df.index.isin(vre_gens)].index
+        df = df.loc[non_vre_gens]
+        df = df[df > 0.01]
+        df_all = pd.concat([df_all, df], axis=1)
+
+    df_all.columns = np.arange(2020, 2050, 5)
+
+    # Create figure
+    plt.figure(figsize=(20, 5))
+
+    # Track x-axis positions
+    x_positions = []
+    x_labels = []
+    x_offset = 0
+
+    df = df_all
+
+    # Plot for each group
+    for group, techs_in_group in backup_techs.items():
+        # Find matching techs in the dataframe
+        matching_techs = [tech for tech in techs_in_group if tech in df.index]
+
+        # Prepare data for this group
+        group_data = df.loc[matching_techs]
+
+        # Prepare bottom for stacking
+        bottom = np.zeros(len(group_data.columns))
+
+        # Plot each technology in the group
+        for j, tech in enumerate(matching_techs):
+            values = group_data.loc[tech].fillna(0)
+            plt.bar(
+                np.arange(len(group_data.columns)) + x_offset,
+                values,
+                1,
+                bottom=bottom,
+                label=tech,
+                color=tech_colors[tech],
+            )
+            bottom += values
+
+        # Store x-axis positions for this group
+        x_positions.append(x_offset + len(group_data.columns) / 2)
+        x_labels.append(group)
+
+        # Update x offset with extra spacing
+        x_offset += len(group_data.columns) + 1  # Add extra space between groups
+
+    plt.ylim(0, 200)
+
+    # Customize the plot
+    plt.title("Versorgung Backup-Kraftwerke (Strom)", fontsize=16)
+    plt.ylabel("TWh", fontsize=12)
+
+    # Create custom x-tick labels with group names below years
+    x_ticks = np.concatenate(
+        [
+            np.arange(len(df.columns)) + i
+            for i in range(0, x_offset, len(df.columns) + 1)
+        ]
+    )
+    x_tick_labels = np.tile(df.columns, len(backup_techs))
+
+    plt.xticks(x_ticks, x_tick_labels, rotation=45)
+
+    # Add group labels below x-axis ticks
+    for pos, label in zip(x_positions, x_labels):
+        plt.text(
+            pos,
+            plt.gca().get_ylim()[0] - plt.gca().get_ylim()[1] * 0.15,
+            label,
+            horizontalalignment="center",
+            verticalalignment="top",
+            fontweight="bold",
+        )
+
+    plt.grid(axis="y")
+
+    # Replace legend labels with German names from carriers_in_german
+    handles, labels = plt.gca().get_legend_handles_labels()
+    new_labels = [
+        carriers_in_german.get(label, label) for label in labels
+    ]  # Replace labels if in dict
+    plt.legend(handles, new_labels, loc="upper center", ncol=7)
+
+    plt.tight_layout()
+    plt.savefig(savepath, bbox_inches="tight")
+
+
+def plot_elec_prices_spatial(
+    network, tech_colors, savepath, onshore_regions, year="2045", region="DE"
+):
+
+    # onshore_regions = gpd.read_file("/home/julian-geis/repos/pypsa-ariadne-1/resources/20241203-force-onwind-south-49cl-disc/KN2045_Bal_v4/regions_onshore_base_s_49.geojson")
+    # onshore_regions = onshore_regions.set_index('name')
+
+    n = network
+    buses = n.buses[n.buses.carrier == "AC"].index
+
+    df = onshore_regions
+    df["elec_price"] = n.buses_t.marginal_price[buses].mean()
+
+    # Netzentgelte, Annuität NEP 2045 - Annuität PyPSA 2045 / Stromverbrauch Pypsa 2045
+    # (19.38 - 12.56 ) / 1.234
+
+    # Create figure
+    fig, ax = plt.subplots(
+        1, 1, subplot_kw={"projection": ccrs.PlateCarree()}, figsize=(9, 6)
+    )
+    crs = ccrs.PlateCarree()
+
+    mvs = df["elec_price"][df.index.str.contains("DE")]
+    vmin = np.nanmin(mvs)
+    vmax = np.nanmax(mvs)
+
+    ax.add_feature(cartopy.feature.BORDERS, edgecolor="black", linewidth=0.5)
+    ax.coastlines(edgecolor="black", linewidth=0.5)
+    ax.set_facecolor("white")
+    ax.add_feature(cartopy.feature.OCEAN, color="azure")
+
+    df[df.index.str.contains("DE")].to_crs(crs.proj4_init).plot(
+        column=f"elec_price",
+        ax=ax,
+        cmap=plt.get_cmap("cividis_r"),
+        linewidth=0.05,
+        edgecolor="grey",
+        legend=True,
+        vmin=vmin,
+        vmax=vmax,
+        legend_kwds={
+            "label": "Strompreise ($€/MWh$)",
+            "orientation": "vertical",
+            "shrink": 0.9,
+        },
+    )
+
+    # max_size = df[f"{carriers[i]}_gen"].max()
+    # df.to_crs(crs.proj4_init).centroid.plot(ax=ax, sizes=df[f"{carriers[i]}_gen"] / max_size *300,  color="black", edgecolor="white")
+    # pypsa.plot.add_legend_circles(ax=ax, sizes=[0.6], labels=["Generation magnitude"], patch_kw={'color': 'black', 'edgecolor': 'white'}, legend_kw={'loc': 'upper left'})
+
+    # Set geographic extent for Germany
+    ax.set_extent([5, 16, 47, 56], ccrs.PlateCarree())  # Germany bounds
+    # ax.set_title(f"{carriers[i]}", fontsize=16, **font1)
+
+    # fig.suptitle(f"Spatial Differences in the electricity generation of the VRE technologies ({model})", fontsize=16, **font1)
+    fig.tight_layout()
+
+    # plt.close()
+    plt.show()
+
+    fig.savefig(savepath, bbox_inches="tight")
+
+
 def assign_location(n):
     for c in n.iterate_components(n.one_port_components | n.branch_components):
         ifind = pd.Series(c.df.index.str.find(" ", start=4), c.df.index)
@@ -712,7 +1245,8 @@ def group_pipes(df, drop_direction=False):
 
 
 def plot_h2_map(n, regions, savepath, only_de=False):
-
+    logger.info("Plotting H2 map")
+    logger.info("Assigning location")
     assign_location(n)
 
     h2_storage = n.stores[n.stores.carrier.isin(["H2", "H2 Store"])]
@@ -753,6 +1287,7 @@ def plot_h2_map(n, regions, savepath, only_de=False):
     h2_kern = n.links[n.links.carrier == "H2 pipeline (Kernnetz)"]
 
     # sum capacitiy for pipelines from different investment periods
+    logger.info("Grouping pipes")
     h2_new = group_pipes(h2_new)
 
     if not h2_retro.empty:
@@ -806,7 +1341,7 @@ def plot_h2_map(n, regions, savepath, only_de=False):
     n.links.bus1 = n.links.bus1.str.replace(" H2", "")
 
     regions = regions.to_crs(proj.proj4_init)
-
+    logger.info("Plotting map")
     fig, ax = plt.subplots(figsize=(10, 8), subplot_kw={"projection": proj})
 
     color_h2_pipe = "#b3f3f4"
@@ -855,7 +1390,7 @@ def plot_h2_map(n, regions, savepath, only_de=False):
         vmax=6,
         vmin=0,
         legend_kwds={
-            "label": "Hydrogen Storage [TWh]",
+            "label": "Wasserstoffspeicher [TWh]",
             "shrink": 0.7,
             "extend": "max",
         },
@@ -864,7 +1399,7 @@ def plot_h2_map(n, regions, savepath, only_de=False):
     sizes = [50, 10]
     labels = [f"{s} GW" for s in sizes]
     sizes = [s / bus_size_factor * 1e3 for s in sizes]
-
+    logger.info("Adding legend")
     legend_kw = dict(
         loc="upper left",
         bbox_to_anchor=(0, 1),
@@ -908,11 +1443,14 @@ def plot_h2_map(n, regions, savepath, only_de=False):
         color_retrofit,
         color_kern,
     ]
+
     labels = carriers + [
         "H2 pipeline (new)",
         "H2 pipeline (repurposed)",
         "H2 pipeline (Kernnetz)",
     ]
+
+    labels = [carriers_in_german.get(c, c) for c in labels]
 
     legend_kw = dict(
         loc="upper left",
@@ -926,6 +1464,7 @@ def plot_h2_map(n, regions, savepath, only_de=False):
     ax.set_facecolor("white")
 
     fig.savefig(savepath, bbox_inches="tight")
+    plt.close()
 
 
 def plot_h2_map_de(n, regions, tech_colors, savepath, specify_buses=None):
@@ -1166,7 +1705,7 @@ def plot_h2_map_de(n, regions, tech_colors, savepath, specify_buses=None):
         vmax=6,
         vmin=0,
         legend_kwds={
-            "label": "Hydrogen Storage [TWh]",
+            "label": "Wasserstoffspeicher [TWh]",
             "shrink": 0.7,
             "extend": "max",
         },
@@ -1240,6 +1779,8 @@ def plot_h2_map_de(n, regions, tech_colors, savepath, specify_buses=None):
         "H2 pipeline (Kernnetz)",
     ]
 
+    labels = [carriers_in_german.get(c, c) for c in labels]
+
     legend_kw = dict(
         loc="upper left",
         bbox_to_anchor=(0, 1.13),
@@ -1251,6 +1792,7 @@ def plot_h2_map_de(n, regions, tech_colors, savepath, specify_buses=None):
 
     ax.set_facecolor("white")
     fig.savefig(savepath, bbox_inches="tight")
+    plt.close()
 
 
 ### electricity transmission
@@ -1266,7 +1808,7 @@ def plot_elec_map_de(
 ):
 
     m = network.copy()
-    m.mremove("Bus", m.buses[m.buses.x == 0].index)
+    m.remove("Bus", m.buses[m.buses.x == 0].index)
     m.buses.drop(m.buses.index[m.buses.carrier != "AC"], inplace=True)
 
     m_base = base_network.copy()
@@ -1323,11 +1865,14 @@ def plot_elec_map_de(
         (m.links.index.str.startswith("DC") | m.links.index.str.startswith("TYNDP"))
         & ~m.links.reversed
     ].index
+    tprojs_all = m.links.loc[
+        (m.links.index.str.startswith("DC") | m.links.index.str.startswith("TYNDP"))
+    ].index
     links_i = m.links.index[m.links.carrier == "DC"]
-    total_exp_linkw = (m.links.p_nom_opt - m_base.links.p_nom).loc[links_i]
+    total_exp_linkw = (m.links.p_nom_opt - m_base.links.p_nom_min).loc[links_i]
     total_exp_linkw[tprojs] = m.links.p_nom_opt[tprojs]
     total_exp_noStart_linkw = total_exp_linkw.copy()
-    total_exp_noStart_linkw.loc[tprojs] = 0
+    total_exp_noStart_linkw.loc[tprojs_all] = 0
     startnetz_linkw = m.links.p_nom_opt[tprojs]
 
     if expansion_case == "total-expansion":
@@ -1353,7 +1898,7 @@ def plot_elec_map_de(
         bus_colors=tech_colors,
         line_widths=line_widths,
         line_colors=tech_colors["AC"],
-        link_widths=link_widths,
+        link_widths=link_widths.clip(0),
         link_colors=tech_colors["DC"],
     )
 
@@ -1364,7 +1909,7 @@ def plot_elec_map_de(
         linewidths=0,
         legend=True,
         legend_kwds={
-            "label": "Battery Storage [GWh]",
+            "label": "Batteriespeicher [GWh]",
             "shrink": 0.7,
             "extend": "max",
         },
@@ -1435,6 +1980,288 @@ def plot_elec_map_de(
 
     add_legend_patches(ax, colors, labels, legend_kw=legend_kw)
     fig.savefig(savepath, bbox_inches="tight")
+    plt.close()
+
+
+def plot_elec_trade(
+    networks,
+    planning_horizons,
+    tech_colors,
+    savepath,
+):
+    incoming_elec = []
+    outgoing_elec = []
+    for year in planning_horizons:
+        n = networks[planning_horizons.index(year)]
+        incoming_lines = n.lines[
+            (n.lines.bus0.str[:2] != "DE") & (n.lines.bus1.str[:2] == "DE")
+        ].index
+        outgoing_lines = n.lines[
+            (n.lines.bus0.str[:2] == "DE") & (n.lines.bus1.str[:2] != "DE")
+        ].index
+        incoming_links = n.links[
+            (n.links.carrier == "DC")
+            & (n.links.bus0.str[:2] != "DE")
+            & (n.links.bus1.str[:2] == "DE")
+        ].index
+        outgoing_links = n.links[
+            (n.links.carrier == "DC")
+            & (n.links.bus0.str[:2] == "DE")
+            & (n.links.bus1.str[:2] != "DE")
+        ].index
+        # positive when withdrawing power from bus0/bus1
+        incoming = n.lines_t.p1[incoming_lines].sum(axis=1).mul(
+            n.snapshot_weightings.generators, axis=0
+        ) + n.links_t.p1[incoming_links].sum(axis=1).mul(
+            n.snapshot_weightings.generators, axis=0
+        )
+        outgoing = n.lines_t.p0[outgoing_lines].sum(axis=1).mul(
+            n.snapshot_weightings.generators, axis=0
+        ) + n.links_t.p0[outgoing_links].sum(axis=1).mul(
+            n.snapshot_weightings.generators, axis=0
+        )
+        incoming_elec.append(
+            incoming[incoming < 0].abs().sum() + outgoing[outgoing > 0].sum()
+        )
+        outgoing_elec.append(
+            incoming[incoming > 0].sum() + outgoing[outgoing < 0].abs().sum()
+        )
+    elec_import = np.array(incoming_elec) / 1e6
+    elec_export = -np.array(outgoing_elec) / 1e6
+    net = elec_import + elec_export
+    x = np.arange(len(planning_horizons))
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.bar(x, elec_import, color=tech_colors["AC"], label="Import")
+    ax.bar(x, elec_export, color="#3f630f", label="Export")
+    ax.scatter(x, net, color="black", marker="x", label="Netto")
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(planning_horizons)
+    ax.axhline(0, color="black", linewidth=0.5)
+    ax.set_ylabel("Strom [TWh]")
+    ax.set_title("Strom Import/Export Deutschland")
+    ax.legend()
+
+    plt.tight_layout()
+    fig.savefig(savepath, bbox_inches="tight")
+
+
+def plot_h2_trade(
+    networks,
+    planning_horizons,
+    tech_colors,
+    savepath,
+):
+    incoming_h2 = []
+    outgoing_h2 = []
+    for year in planning_horizons:
+        n = networks[planning_horizons.index(year)]
+        incoming_links = n.links[
+            (n.links.carrier.str.contains("H2 pipeline"))
+            & (n.links.bus0.str[:2] != "DE")
+            & (n.links.bus1.str[:2] == "DE")
+        ].index
+        outgoing_links = n.links[
+            (n.links.carrier.str.contains("H2 pipeline"))
+            & (n.links.bus0.str[:2] == "DE")
+            & (n.links.bus1.str[:2] != "DE")
+        ].index
+        # positive when withdrawing power from bus0/bus1
+        incoming = (
+            n.links_t.p1[incoming_links]
+            .sum(axis=1)
+            .mul(n.snapshot_weightings.generators, axis=0)
+        )
+        outgoing = (
+            n.links_t.p0[outgoing_links]
+            .sum(axis=1)
+            .mul(n.snapshot_weightings.generators, axis=0)
+        )
+        incoming_h2.append(
+            incoming[incoming < 0].abs().sum() + outgoing[outgoing > 0].sum()
+        )
+        outgoing_h2.append(
+            incoming[incoming > 0].sum() + outgoing[outgoing < 0].abs().sum()
+        )
+    h2_import = np.array(incoming_h2) / 1e6
+    h2_export = -np.array(outgoing_h2) / 1e6
+    net = h2_import + h2_export
+    x = np.arange(len(planning_horizons))
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.bar(x, h2_import, color=tech_colors["H2 pipeline"], label="Import")
+    ax.bar(x, h2_export, color=tech_colors["H2 pipeline (Kernnetz)"], label="Export")
+    ax.scatter(x, net, color="black", marker="x", label="Netto")
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(planning_horizons)
+    ax.axhline(0, color="black", linewidth=0.5)
+    ax.set_ylabel("H2 [TWh]")
+    ax.set_title("Wasserstoff Import/Export Deutschland")
+    ax.legend()
+
+    plt.tight_layout()
+    fig.savefig(savepath, bbox_inches="tight")
+
+
+# electricity capacity map
+def plot_cap_map_de(
+    network,
+    tech_colors,
+    regions_de,
+    savepath,
+):
+
+    m = network.copy()
+    m.mremove("Bus", m.buses[m.buses.x == 0].index)
+    m.buses.drop(m.buses.index[m.buses.carrier != "AC"], inplace=True)
+
+    # storage as cmap on map
+    battery_storage = m.stores[m.stores.carrier.isin(["battery"])]
+    regions_de["battery"] = (
+        battery_storage.rename(
+            index=battery_storage.bus.str.replace(" battery", "").map(m.buses.location)
+        )
+        .e_nom_opt.groupby(level=0)
+        .sum()
+        .div(1e3)
+    )  # GWh
+    regions_de["battery"] = regions_de["battery"].where(regions_de["battery"] > 0.1)
+
+    # buses
+    bus_size_factor = 0.5e6
+    carriers = ["onwind", "offwind-ac", "offwind-dc", "solar", "solar-hsat"]
+    carriers_links = [
+        "H2 Fuel Cell",
+        "urban central H2 CHP",
+        "H2 OCGT",
+        "urban central solid biomass CHP",
+        "urban central solid biomass CHP CC",
+        "waste CHP",
+        "waste CHP CC",
+        "CCGT",
+        "urban central gas CHP",
+        "urban central gas CHP CC",
+        "OCGT",
+    ]
+    elec = m.generators[
+        (m.generators.carrier.isin(carriers)) & (m.generators.bus.str.contains("DE"))
+    ].index
+    elec_links = m.links[
+        (m.links.carrier.isin(carriers_links)) & (m.links.index.str.contains("DE"))
+    ].index
+    bus_sizes = (
+        m.generators.loc[elec, "p_nom_opt"]
+        .groupby([m.generators.bus, m.generators.carrier])
+        .sum()
+        / bus_size_factor
+    )
+    bus_sizes_links = (
+        m.links.loc[elec_links, "p_nom_opt"]
+        .groupby([m.links.bus1, m.links.carrier])
+        .sum()
+        / bus_size_factor
+    )
+    bus_sizes = pd.concat([bus_sizes, bus_sizes_links])
+    replacement_dict = {
+        "onwind": "Onshore Wind",
+        "offwind-ac": "Offshore Wind",
+        "offwind-dc": "Offshore Wind",
+        "solar": "Solar",
+        "solar-hsat": "Solar",
+        "H2 Fuel Cell": "H2",
+        "urban central H2 CHP": "H2",
+        "H2 OCGT": "H2",
+        "urban central solid biomass CHP": "Biomasse",
+        "urban central solid biomass CHP CC": "Biomasse",
+        "waste CHP": "Abfall",
+        "waste CHP CC": "Abfall",
+        "CCGT": "Gas",
+        "urban central gas CHP": "Gas",
+        "urban central gas CHP CC": "Gas",
+        "OCGT": "Gas",
+    }
+    tech_colors["Biomasse"] = tech_colors["biomass"]
+    tech_colors["Abfall"] = tech_colors["waste"]
+    tech_colors["Gas"] = tech_colors["gas"]
+    bus_sizes = bus_sizes.rename(index=replacement_dict, level=1)
+    bus_sizes = bus_sizes.groupby(level=[0, 1]).sum()
+    carriers = bus_sizes.index.get_level_values(1).unique().tolist()
+
+    regions_de = regions_de.to_crs(proj.proj4_init)
+    fig, ax = plt.subplots(figsize=(10, 8), subplot_kw={"projection": proj})
+
+    m.plot(
+        ax=ax,
+        margin=0.06,
+        bus_sizes=bus_sizes,
+        bus_colors=tech_colors,
+        line_alpha=0,
+        link_alpha=0,
+    )
+
+    regions_de.plot(
+        ax=ax,
+        column="battery",
+        cmap="Oranges",
+        linewidths=0,
+        legend=True,
+        legend_kwds={
+            "label": "Batteriespeicher [GWh]",
+            "shrink": 0.7,
+            "extend": "max",
+        },
+    )
+
+    # Set geographic extent for Germany
+    ax.set_extent([5.5, 15.5, 47, 56], crs=ccrs.PlateCarree())
+
+    sizes = [10, 5]
+    labels = [f"{s} GW" for s in sizes]
+    sizes = [s / bus_size_factor * 1e3 for s in sizes]
+
+    legend_kw = dict(
+        loc="upper left",
+        bbox_to_anchor=(0, 1),
+        labelspacing=0.8,
+        handletextpad=0,
+        frameon=True,
+        facecolor="white",
+    )
+
+    add_legend_circles(
+        ax,
+        sizes,
+        labels,
+        srid=m.srid,
+        patch_kw=dict(facecolor="lightgrey"),
+        legend_kw=legend_kw,
+    )
+
+    legend_kw = dict(
+        loc=[0.2, 0.9],
+        frameon=True,
+        labelspacing=0.5,
+        handletextpad=1,
+        fontsize=13,
+        ncol=2,
+        facecolor="white",
+    )
+
+    colors = [tech_colors[c] for c in carriers]
+    labels = carriers
+    legend_kw = dict(
+        loc="upper left",
+        bbox_to_anchor=(0.5, 0),
+        ncol=3,
+        frameon=True,
+        facecolor="white",
+    )
+
+    add_legend_patches(ax, colors, labels, legend_kw=legend_kw)
+    fig.savefig(savepath, bbox_inches="tight")
+    plt.close()
 
 
 if __name__ == "__main__":
@@ -1476,24 +2303,29 @@ if __name__ == "__main__":
             snakemake.input.costs,
         )
     )
-    
+
     # Load data
     _networks = [pypsa.Network(fn) for fn in snakemake.input.networks]
     modelyears = [fn[-7:-3] for fn in snakemake.input.networks]
 
-    if snakemake.params.transmission_projects:   
-        # Hack the transmission projects
-        networks = [
-            hack_transmission_projects(n.copy(), _networks[0], int(my), snakemake, costs)
-            for n, my in zip(_networks, modelyears)
-        ]
-    else:
-        networks = _networks
+    # Hack the transmission projects
+    networks = [
+        process_postnetworks(n.copy(), _networks[0], int(my), snakemake, c)
+        for n, my, c in zip(_networks, modelyears, costs)
+    ]
+    del _networks
+    
 
-    ###
+    # # for running with explicit networks not within repo structur (comment out load data and load regions)
+    # diry = "postnetworks-folder"
+    # file_list = os.listdir(diry)
+    # file_list.sort()
+    # networks = [pypsa.Network(diry+"/"+fn) for fn in file_list]
+    # modelyears = [fn[-7:-3] for fn in snakemake.input.networks]
+    # regions = gpd.read_file("path-to-file/regions_onshore_base_s_49.geojson").set_index("name")
 
     # ensure output directory exist
-    for dir in snakemake.output[2:]:
+    for dir in snakemake.output[5:]:
         if not os.path.exists(dir):
             os.makedirs(dir)
 
@@ -1503,7 +2335,9 @@ if __name__ == "__main__":
     tech_colors = snakemake.params.plotting["tech_colors"]
 
     # update tech_colors
-    colors_update = networks[0].carriers.color.rename(networks[0].carriers.nice_name).to_dict()
+    colors_update = (
+        networks[0].carriers.color.rename(networks[0].carriers.nice_name).to_dict()
+    )
     colors_update = {k: v for k, v in colors_update.items() if v != ""}
     tech_colors.update(colors_update)
 
@@ -1533,13 +2367,6 @@ if __name__ == "__main__":
     tech_colors["rural oil boiler"] = tech_colors["oil boiler"]
     tech_colors["rural ground heat pump"] = tech_colors["ground heat pump"]
 
-
-    # # clean tech_colors
-    # if "" in tech_colors:
-    #     del tech_colors[""]
-    # if "none" in tech_colors:
-    #     del tech_colors["none"]
-
     ### plotting
     for year in planning_horizons:
         network = networks[planning_horizons.index(year)].copy()
@@ -1556,6 +2383,7 @@ if __name__ == "__main__":
         )
 
         # electricity supply and demand
+        logger.info("Plotting electricity supply and demand for year %s", year)
         plot_nodal_balance(
             network=network,
             nodal_balance=balance,
@@ -1567,10 +2395,12 @@ if __name__ == "__main__":
             resample="D",
             plot_lmps=False,
             plot_loads=False,
-            nice_names=True,
+            german_carriers=True,
             threshold=1e2,  # in GWh as sum over period
             condense_groups=c_g,
             condense_names=c_n,
+            title="Strombilanz",
+            ylabel="Stromerzeugung/ -verbrauch [GW]",
         )
 
         plot_nodal_balance(
@@ -1581,10 +2411,12 @@ if __name__ == "__main__":
             end_date=network.snapshots[-1],
             savepath=f"{snakemake.output.elec_balances}/elec-Jan-DE-{year}.png",
             model_run=snakemake.wildcards.run,
-            nice_names=True,
+            german_carriers=True,
             threshold=1e2,
             condense_groups=[electricity_load, electricity_imports],
             condense_names=["Electricity load", "Electricity trade"],
+            title="Strombilanz",
+            ylabel="Stromerzeugung/ -verbrauch [GW]",
         )
 
         plot_nodal_balance(
@@ -1595,20 +2427,23 @@ if __name__ == "__main__":
             end_date=network.snapshots[-1],
             savepath=f"{snakemake.output.elec_balances}/elec-May-DE-{year}.png",
             model_run=snakemake.wildcards.run,
-            nice_names=True,
+            german_carriers=True,
             threshold=1e2,
             condense_groups=[electricity_load, electricity_imports],
             condense_names=["Electricity load", "Electricity trade"],
+            title="Strombilanz",
+            ylabel="Stromerzeugung/ -verbrauch [GW]",
         )
 
         # heat supply and demand
+        logger.info("Plotting heat supply and demand")
         for carriers in ["urban central heat", "urban decentral heat", "rural heat"]:
             plot_nodal_balance(
                 network=network,
                 nodal_balance=balance,
                 tech_colors=tech_colors,
-                start_date=network.snapshots[0],
-                end_date=network.snapshots[-1],
+                start_date="2019-01-01 00:00:00",
+                end_date="2019-12-31 00:00:00",
                 savepath=f"{snakemake.output.heat_balances}/heat-all-year-DE-{carriers}-{year}.png",
                 model_run=snakemake.wildcards.run,
                 resample="D",
@@ -1619,7 +2454,7 @@ if __name__ == "__main__":
                 condense_groups=c_g,
                 condense_names=c_n,
                 carriers=[carriers],
-                ylabel="Heat [GW]",
+                ylabel="Wärme [GW]",
                 title=f"{carriers} balance",
             )
 
@@ -1627,8 +2462,8 @@ if __name__ == "__main__":
                 network=network,
                 nodal_balance=balance,
                 tech_colors=tech_colors,
-                start_date=network.snapshots[0],
-                end_date=network.snapshots[-1],
+                start_date="2019-01-01 00:00:00",
+                end_date="2019-01-31 00:00:00",
                 savepath=f"{snakemake.output.heat_balances}/heat-Jan-DE-{carriers}-{year}.png",
                 model_run=snakemake.wildcards.run,
                 plot_lmps=False,
@@ -1644,8 +2479,8 @@ if __name__ == "__main__":
                 network=network,
                 nodal_balance=balance,
                 tech_colors=tech_colors,
-                start_date=network.snapshots[0],
-                end_date=network.snapshots[-1],
+                start_date="2019-05-01 00:00:00",
+                end_date="2019-05-31 00:00:00",
                 savepath=f"{snakemake.output.heat_balances}/heat-May-DE-{carriers}-{year}.png",
                 model_run=snakemake.wildcards.run,
                 plot_lmps=False,
@@ -1655,9 +2490,10 @@ if __name__ == "__main__":
                 carriers=[carriers],
                 ylabel="Heat [GW]",
                 title=f"{carriers} balance",
-            )        
+            )
 
         # storage
+        logger.info("Plotting storage")
         plot_storage(
             network=network,
             tech_colors=tech_colors,
@@ -1668,6 +2504,7 @@ if __name__ == "__main__":
         )
 
     ## price duration
+    logger.info("Plotting price duration curve")
     networks_dict = {int(my): n for n, my in zip(networks, modelyears)}
     plot_price_duration_curve(
         networks=networks_dict,
@@ -1675,6 +2512,7 @@ if __name__ == "__main__":
         savepath=snakemake.output.elec_price_duration_curve,
         model_run=snakemake.wildcards.run,
         years=planning_horizons,
+        languange="german",
     )
 
     plot_price_duration_hist(
@@ -1685,7 +2523,39 @@ if __name__ == "__main__":
         years=planning_horizons,
     )
 
+    plot_backup_capacity(
+        networks=networks_dict,
+        tech_colors=tech_colors,
+        savepath=snakemake.output.backup_capacity,
+        backup_techs=backup_techs,
+        vre_gens=vre_gens,
+        region="DE",
+    )
+
+    plot_backup_generation(
+        networks=networks_dict,
+        tech_colors=tech_colors,
+        savepath=snakemake.output.backup_generation,
+        backup_techs=backup_techs,
+        vre_gens=vre_gens,
+        region="DE",
+    )
+
+    # load regions
+    regions = gpd.read_file(snakemake.input.regions_onshore_clustered).set_index("name")
+
+    year = 2045
+    plot_elec_prices_spatial(
+        network=networks[planning_horizons.index(year)].copy(),
+        tech_colors=tech_colors,
+        onshore_regions=regions,
+        savepath=snakemake.output.elec_prices_spatial_de,
+        region="DE",
+        year=year,
+    )
+
     ## hydrogen transmission
+    logger.info("Plotting hydrogen transmission")
     map_opts = snakemake.params.plotting["map"]
     snakemake.params.plotting["projection"] = {"name": "EqualEarth"}
     proj = load_projection(snakemake.params.plotting)
@@ -1693,6 +2563,7 @@ if __name__ == "__main__":
     
     for year in planning_horizons:
         network = networks[planning_horizons.index(year)].copy()
+        logger.info(f"Plotting hydrogen transmission for {year}")
         plot_h2_map(
             network,
             regions,
@@ -1700,6 +2571,8 @@ if __name__ == "__main__":
         )
 
         regions_de = regions[regions.index.str.startswith("DE")]
+        logger.info(f"Plotting hydrogen transmission for {year} in DE")
+        del network
         for sb in ["production", "consumption"]:
             network = networks[planning_horizons.index(year)].copy()
             plot_h2_map_de(
@@ -1709,22 +2582,44 @@ if __name__ == "__main__":
                 specify_buses=sb,
                 savepath=f"{snakemake.output.h2_transmission}/h2_transmission_DE_{sb}_{year}.png",
             )
+            del network
+
+    plot_h2_trade(
+        networks,
+        planning_horizons,
+        tech_colors,
+        savepath=f"{snakemake.output.h2_transmission}/h2-trade-DE.png",
+    )
 
     ## electricity transmission
+    logger.info("Plotting electricity transmission")
     for year in planning_horizons:
-        network = networks[planning_horizons.index(year)].copy()
         scenarios = ["total-expansion", "startnetz", "pypsa"]
         for s in scenarios:
             plot_elec_map_de(
-                network,
-                networks[planning_horizons.index(2020)].copy(),
+                networks[planning_horizons.index(year)],
+                networks[planning_horizons.index(2020)],
                 tech_colors,
                 regions_de,
                 savepath=f"{snakemake.output.elec_transmission}/elec-transmission-DE-{s}-{year}.png",
                 expansion_case=s,
             )
+        plot_cap_map_de(
+            networks[planning_horizons.index(year)],
+            tech_colors,
+            regions_de,
+            savepath=f"{snakemake.output.elec_transmission}/elec-cap-DE-{year}.png",
+        )
+
+    plot_elec_trade(
+        networks,
+        planning_horizons,
+        tech_colors,
+        savepath=f"{snakemake.output.elec_transmission}/elec-trade-DE.png",
+    )
 
     ## nodal balances general (might not be very robust)
+    logger.info("Plotting nodal balances")
     plt.style.use(["bmh", snakemake.input.rc])
 
     year = 2045

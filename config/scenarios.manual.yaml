@@ -15,17 +15,17 @@ CurrentPolicies:
   co2_budget_DE_source: UBA
 
   co2_budget:
-    2020: 0.800 # 20% reduction by 2020
-    2025: 0.620
-    2030: 0.500 # less than 55% reduction by 2030 (Ff55)
-    2035: 0.450 # stagnation for the Trend scenario
-    2040: 0.450
-    2045: 0.450
-    2050: 0.450
+    2020: 0.720 # average emissions of 2019 to 2021 relative to 1990, excl LULUCF, EEA data, European Environment Agency. (2023a). Annual European Union greenhouse gas inventory 1990–2021 and inventory report 2023 - CRF Table. https://unfccc.int/documents/627830
+    2025: 0.675 # With existing measures (WEM) projection, CO2 excl LULUCF, European Environment Agency. (2023e). Member States’ greenhouse gas (GHG) emission projections 2023. https://www.eea.europa.eu/en/datahub/datahubitem-view/4b8d94a4-aed7-4e67-a54c-0623a50f48e8
+    2030: 0.569
+    2035: 0.502
+    2040: 0.452
+    2045: 0.431
+    2050: 0.419
 
   costs:
     horizon: "mean"
-    NEP: 2021
+    NEP: 2023
     transmission: "underground" # either overhead line ("overhead") or underground cable ("underground")
   solving:
     constraints:
@@ -39,10 +39,10 @@ CurrentPolicies:
               2045: 86.5
           offwind:
             DE:
-              2030: 22.5   # 75 % Wind-auf-See Law
-              2035: 22.5
-              2040: 22.5
-              2045: 22.5
+              2030: 17.3
+              2035: 29.3
+              2040: 29.3
+              2045: 29.3
           solar:
             DE:
               2030: 161.25   # 75 % PV strategy
@@ -52,6 +52,14 @@ CurrentPolicies:
       # boundary condition of maximum volumes
       limits_capacity_max:
         Generator:
+          offwind:
+            DE:
+              2020: 7.8
+              2025: 11.3
+              2030: 17.3 # 12 less than NEP, because of 1 year delay
+              2035: 35 # 29.3 + a little extra
+              2040: 70
+              2045: 70
           onwind:
             DE:
               2030: 94.5 # uba Projektionsbericht
@@ -114,6 +122,10 @@ CurrentPolicies:
     district_heating:
       potential: 0.1
 
+  offshore_nep_force:
+    cutin_year: 2025
+    cutout_year: 2035 # Hackily reduced to 2030 if delay_years: 1
+    delay_years: 1
 
 
 KN2045_Bal_v4:
@@ -130,7 +142,7 @@ KN2045_Bal_v4:
 
   costs:
     horizon: "mean"
-    NEP: 2021
+    NEP: 2023
     transmission: "overhead" # either overhead line ("overhead") or underground cable ("underground")
   solving:
     constraints:
@@ -202,7 +214,7 @@ KN2045_Elec_v4:
 
   costs:
     horizon: "mean"
-    NEP: 2021
+    NEP: 2023
     transmission: "overhead" # either overhead line ("overhead") or underground cable ("underground")
   solving:
     constraints:
@@ -273,7 +285,7 @@ KN2045_H2_v4:
 
   costs:
     horizon: "mean"
-    NEP: 2021
+    NEP: 2023
     transmission: "overhead" # either overhead line ("overhead") or underground cable ("underground")
   solving:
     constraints:
@@ -347,7 +359,7 @@ KN2045plus_EasyRide:
 
   costs:
     horizon: "optimist"
-    NEP: 2021
+    NEP: 2023
     transmission: "overhead" # either overhead line ("overhead") or underground cable ("underground")
   solving:
     constraints:
@@ -417,7 +429,7 @@ KN2045plus_LowDemand:
 
   costs:
     horizon: "optimist"
-    NEP: 2021
+    NEP: 2023
     transmission: "overhead" # either overhead line ("overhead") or underground cable ("underground")
   solving:
     constraints:
@@ -489,13 +501,13 @@ KN2045minus_WorstCase:
   co2_budget_DE_source: UBA
 
   co2_budget:
-    2020: 0.800 # 20% reduction by 2020
-    2025: 0.620
-    2030: 0.500 # less than 55% reduction by 2030 (Ff55)
-    2035: 0.450 # stagnation of CO2 reduction
-    2040: 0.450
-    2045: 0.450
-    2050: 0.450
+    2020: 0.720 # average emissions of 2019 to 2021 relative to 1990, excl LULUCF, EEA data, European Environment Agency. (2023a). Annual European Union greenhouse gas inventory 1990–2021 and inventory report 2023 - CRF Table. https://unfccc.int/documents/627830
+    2025: 0.675 # With existing measures (WEM) projection, CO2 excl LULUCF, European Environment Agency. (2023e). Member States’ greenhouse gas (GHG) emission projections 2023. https://www.eea.europa.eu/en/datahub/datahubitem-view/4b8d94a4-aed7-4e67-a54c-0623a50f48e8
+    2030: 0.569
+    2035: 0.502
+    2040: 0.452
+    2045: 0.431
+    2050: 0.419
 
   costs:
     horizon: "pessimist"
@@ -557,10 +569,10 @@ KN2045minus_WorstCase:
               2045: 86.5
           offwind:
             DE:
-              2030: 22.5   # 75 % Wind-auf-See Law
-              2035: 22.5
-              2040: 22.5
-              2045: 22.5
+              2030: 17.3   # 75 % Wind-auf-See Law
+              2035: 29.3
+              2040: 29.3
+              2045: 29.3
           solar:
             DE:
               2030: 161.25   # 75 % PV strategy
@@ -573,6 +585,14 @@ KN2045minus_WorstCase:
               2030: 5
       limits_capacity_max:
         Generator:
+          offwind:
+            DE:
+              2020: 7.8
+              2025: 11.3
+              2030: 17.3 # 12 less than NEP, because of 1 year delay
+              2035: 35 # 29.3 + a little extra
+              2040: 70
+              2045: 70
           onwind:
             DE:
               2030: 94.5 # uba Projektionsbericht
@@ -588,6 +608,12 @@ KN2045minus_WorstCase:
     district_heating:
       potential: 0.1
 
+  offshore_nep_force:
+    cutin_year: 2025
+    cutout_year: 2035 # Hackily reduced to 2030 if delay_years: 1
+    delay_years: 1
+
+
 KN2045minus_SupplyFocus:
 # Nachfrage genau so hoch wie in Szenario WorstCase
 # Ausbau EE und EE Importe jetzt aber auskömmlich
@@ -602,13 +628,13 @@ KN2045minus_SupplyFocus:
   co2_budget_DE_source: UBA
 
   co2_budget:
-    2020: 0.800 # 20% reduction by 2020
-    2025: 0.620
-    2030: 0.500 # less than 55% reduction by 2030 (Ff55)
-    2035: 0.450 # stagnation of CO2 reduction
-    2040: 0.450
-    2045: 0.450
-    2050: 0.450
+    2020: 0.720 # average emissions of 2019 to 2021 relative to 1990, excl LULUCF, EEA data, European Environment Agency. (2023a). Annual European Union greenhouse gas inventory 1990–2021 and inventory report 2023 - CRF Table. https://unfccc.int/documents/627830
+    2025: 0.675 # With existing measures (WEM) projection, CO2 excl LULUCF, European Environment Agency. (2023e). Member States’ greenhouse gas (GHG) emission projections 2023. https://www.eea.europa.eu/en/datahub/datahubitem-view/4b8d94a4-aed7-4e67-a54c-0623a50f48e8
+    2030: 0.569
+    2035: 0.502
+    2040: 0.452
+    2045: 0.431
+    2050: 0.419
   solving:
     constraints:
       # boundary condition of maximum volumes
@@ -663,12 +689,6 @@ KN2045minus_SupplyFocus:
               2035: 115 # not forcing more EE
               2040: 115
               2045: 115
-          offwind:
-            DE:
-              2030: 30 # Wind-auf-See Law
-              2035: 30 # not forcing more EE
-              2040: 30
-              2045: 30
           solar:
             DE:
               2025: 101
@@ -682,9 +702,6 @@ KN2045minus_SupplyFocus:
               2030: 5
       limits_capacity_max:
         Generator:
-          onwind:
-            DE:
-              2030: 94.5 # uba Projektionsbericht
           solar:
             DE:
               2030: 215 # uba Projektionsbericht

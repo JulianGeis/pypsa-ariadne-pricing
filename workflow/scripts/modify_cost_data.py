@@ -117,7 +117,9 @@ if __name__ == "__main__":
 
     # add carbon component to fossil fuel costs
     investment_year = int(snakemake.wildcards.planning_horizons[-4:])
-    if investment_year in snakemake.params.co2_price_add_on_fossils.keys():
+    if (snakemake.params.co2_price_add_on_fossils is not None) and (
+        investment_year in snakemake.params.co2_price_add_on_fossils.keys()
+    ):
         co2_price = snakemake.params.co2_price_add_on_fossils[investment_year]
         logger.info(
             f"Adding carbon component according to a co2 price of {co2_price} €/t to fossil fuel costs."
@@ -144,6 +146,12 @@ if __name__ == "__main__":
     )  # KEA costs / 2020 costs
     logger.info(
         f"Scaling central water tank storage investment costs to KEA Technikkatalog: {costs.loc['central water tank storage', 'investment'].value} {costs.loc['central water tank storage', 'investment'].unit}."
+    )
+
+    # increase central gas CHP lifetime to 40 years
+    costs.at[("central gas CHP", "lifetime"), "value"] = 40
+    logger.info(
+        f"Setting lifetime of central gas CHP to {costs.at[("central gas CHP" , "lifetime") , "value"]} {costs.at[("central gas CHP" , "lifetime") , "unit"]}."
     )
 
     costs.to_csv(snakemake.output[0])

@@ -6,7 +6,102 @@ import numpy as np
 import pandas as pd
 
 
-def plot_NEP_Trassen(df, savepath=None):
+def plot_Kernnetz(df, savepath=None, currency_year=2020):
+    key = "Investment|Energy Supply|Hydrogen|Transmission and Distribution|"
+
+    data = {
+        "Kategorie": ["FNB", "PyPSA"],
+        "Kernnetz-Zubau": [
+            12.3 + 0.6,
+            df.loc[key + "Kernnetz|New-build"].values.sum() * 5,
+        ],
+        "Kernnetz-Umstellung": [
+            3.2 + 0.2,
+            df.loc[key + "Kernnetz|Retrofitted"].values.sum() * 5,
+        ],
+        "Endogen-Zubau": [
+            None,
+            df.loc[key + "Endogen|New-build"].values.sum() * 5,
+        ],
+        "Endogen-Umstellung": [
+            None,
+            df.loc[key + "Endogen|Retrofitted"].values.sum() * 5,
+        ],
+        "PCI+IPCEI": [
+            7.8,
+            df.loc[key + "Kernnetz|PCI+IPCEI"].values.sum() * 5,
+        ],
+        "Not PCI+IPCEI": [
+            8.4,
+            df.loc[key + "Kernnetz|NOT-PCI+IPCEI"].values.sum() * 5,
+        ],
+    }
+
+    plotframe = pd.DataFrame(data)
+    plotframe.set_index("Kategorie", inplace=True)
+
+    if currency_year == 2023:
+        plotframe.loc["PyPSA"] *= 1.1076
+    elif currency_year == 2020:
+        plotframe.loc["FNB"] /= 1.1076
+    else:
+        raise ValueError("Currency year not supported")
+
+    # Set up the plot
+    fig, ax = plt.subplots(1, 2, figsize=(10, 6))
+
+    # Create bars
+    bar_width = 0.35
+    x = np.arange(2)  # Three groups
+
+    group1 = [
+        "Kernnetz-Zubau",
+        "Kernnetz-Umstellung",
+        "Endogen-Zubau",
+        "Endogen-Umstellung",
+    ]
+    group2 = ["PCI+IPCEI", "Not PCI+IPCEI"]
+
+    colors_dict = {
+        # Group 1 - Using turquoise to pink spectrum
+        "Kernnetz-Zubau": "#00A4B4",  # Turquoise
+        "Kernnetz-Umstellung": "#20CFB4",  # Bright turquoise-mint
+        "Endogen-Zubau": "#FF69B4",  # Hot pink
+        "Endogen-Umstellung": "#BA55D3",  # Medium orchid (purple-pink)
+        # Group 2 - Keeping warm colors
+        "PCI+IPCEI": "#D95F02",  # Orange
+        "Not PCI+IPCEI": "#E7B031",  # Golden yellow
+    }
+    # Create grouped bars
+    y_limit = plotframe[group1].sum(axis=1).max() + 3
+    plotframe[group1].plot(
+        kind="bar",
+        stacked=True,
+        ax=ax[0],
+        ylim=(0, y_limit),
+        ylabel="Investment (Mrd. €)",
+        color=[colors_dict.get(x, "#333333") for x in group1],
+    )
+    plotframe[group2].plot(
+        kind="bar",
+        stacked=True,
+        ax=ax[1],
+        ylim=(0, y_limit),
+        color=[colors_dict.get(x, "#333333") for x in group2],
+    )
+
+    plt.suptitle("Investitionen ins Wasserstoffnetz")
+
+    # Adjust layout
+    plt.tight_layout()
+
+    if savepath:
+        plt.savefig(savepath, bbox_inches="tight")
+    else:
+        plt.show()
+
+
+def plot_NEP_Trassen(df, savepath=None, gleichschaltung=True):
 
     NEP_Trassen = {
         "NEP-DC": {
@@ -29,7 +124,7 @@ def plot_NEP_Trassen(df, savepath=None):
     }
 
     data = {
-        "Category": ["DC", "AC"],
+        "Kategorie": ["DC", "AC"],
         "Startnetz": [
             NEP_Trassen["NEP-DC"]["Startnetz"],
             NEP_Trassen["NEP-AC"]["Startnetz"],
@@ -41,6 +136,10 @@ def plot_NEP_Trassen(df, savepath=None):
         "exogen": [
             NEP_Trassen["PyPSA-DC"]["exogen"],
             NEP_Trassen["PyPSA-AC"]["exogen"],
+        ],
+        "Übernahme": [
+            0,
+            NEP_Trassen["NEP-AC"]["Startnetz"] - NEP_Trassen["PyPSA-AC"]["exogen"],
         ],
         "endogen": [
             NEP_Trassen["PyPSA-DC"]["endogen"],
@@ -65,118 +164,115 @@ def plot_NEP_Trassen(df, savepath=None):
         label="Zubaunetz",
     )
     plt.bar(indices + bar_width, plotframe["exogen"], bar_width, label="exogen")
+    bottom = plotframe["exogen"].copy()
+    if gleichschaltung:
+        plt.bar(
+            indices + bar_width,
+            plotframe["Übernahme"],
+            bar_width,
+            bottom=plotframe["exogen"],
+            label="Übernahme",
+            color="darkgreen",
+        )
+        bottom += plotframe["Übernahme"]
     plt.bar(
         indices + bar_width,
         plotframe["endogen"],
         bar_width,
-        bottom=plotframe["exogen"],
+        bottom=bottom,
         label="endogen",
     )
 
-    plt.xlabel("Category")
+    plt.xlabel("Kategorie")
     plt.ylabel("km")
-    plt.title("Trassenlänge Onshore Transmission Grid")
+    plt.title("Trassenlänge Übertragungsnetz Onshore")
 
     # Adjust the x-ticks to be between the two bars
-    plt.xticks(indices + bar_width / 2, plotframe["Category"])
+    plt.xticks(indices + bar_width / 2, plotframe["Kategorie"])
     plt.legend()
     if savepath:
         plt.savefig(savepath, bbox_inches="tight")
     else:
         plt.show()
 
+    plotframe["NEP-Total"] = plotframe["Startnetz"] + plotframe["Zubaunetz"]
+    plotframe["PyPSA-Total"] = (
+        plotframe["exogen"] + plotframe["endogen"] + plotframe["Übernahme"]
+    )
+    plotframe.to_csv(snakemake.output.trassenlaenge_csv)
 
-def plot_NEP(df, savepath=None):
+
+def plot_NEP(df, savepath=None, gleichschaltung=True, currency_year=2020):
+
     key = "Investment|Energy Supply|Electricity|Transmission|"
 
-    NEP_investment = {
-        "NEP-Offshore": {"Startnetz": 12.4, "Zubaunetz": 145.1},
-        "PyPSA-Offshore": {
-            "exogen": df.loc[key + "Offshore|NEP"].values.sum() * 5,
-            "endogen": (
-                df.loc[key + "Offshore"].values - df.loc[key + "Offshore|NEP"].values
-            ).sum()
-            * 5,
-        },
-        "NEP-DC": {"Startnetz": 26, "Zubaunetz": 46.2},
-        "PyPSA-DC": {
-            "exogen": df.loc[key + "DC|Onshore|NEP"].values.sum() * 5,
-            "endogen": (
-                df.loc[key + "DC|Onshore"].values
-                - df.loc[key + "DC|Onshore|NEP"].values
-            ).sum()
-            * 5,
-        },
-        "NEP-AC": {"Startnetz": 14.5, "Zubaunetz": 30.5},
-        "PyPSA-AC": {
-            "exogen": df.loc[key + "AC|Onshore|NEP"].values.sum() * 5,
-            "endogen": (
-                df.loc[key + "AC|Onshore"].values
-                - df.loc[key + "AC|Onshore|NEP"].values
-            ).sum()
-            * 5,
-        },
-        "NEP-Q": {"Startnetz": 9.4, "Zubaunetz": 29.5},
-        "PyPSA-Q": {
-            "exogen": df.loc[key + "AC|Reactive Power Compensation"].values.sum() * 5,
-        },
-    }
-    NEP_investment = pd.DataFrame(NEP_investment).T
-    NEP_investment.loc["NEP-Onshore", "Startnetz"] = (
-        NEP_investment.loc["NEP-DC", "Startnetz"]
-        + NEP_investment.loc["NEP-AC", "Startnetz"]
-        + NEP_investment.loc["NEP-Q", "Startnetz"]
-    )
-    NEP_investment.loc["NEP-Onshore", "Zubaunetz"] = (
-        NEP_investment.loc["NEP-DC", "Zubaunetz"]
-        + NEP_investment.loc["NEP-AC", "Zubaunetz"]
-        + NEP_investment.loc["NEP-Q", "Zubaunetz"]
-    )
-    NEP_investment.loc["PyPSA-Onshore", "exogen"] = (
-        NEP_investment.loc["PyPSA-DC", "exogen"]
-        + NEP_investment.loc["PyPSA-AC", "exogen"]
-        + NEP_investment.loc["PyPSA-Q", "exogen"]
-    )
-    NEP_investment.loc["PyPSA-Onshore", "endogen"] = (
-        NEP_investment.loc["PyPSA-DC", "endogen"]
-        + NEP_investment.loc["PyPSA-AC", "endogen"]
-    )
-
-    # Create a DataFrame in the format ChatGPT suggested
     data = {
-        "Category": ["DC", "AC", "Q", "Onshore", "Offshore"],
+        "Kategorie": ["DC", "AC", "System-\ndienstleistungen", "Onshore", "Offshore"],
         "Startnetz": [
-            NEP_investment.loc["NEP-DC", "Startnetz"],
-            NEP_investment.loc["NEP-AC", "Startnetz"],
-            NEP_investment.loc["NEP-Q", "Startnetz"],
-            NEP_investment.loc["NEP-Onshore", "Startnetz"],
-            NEP_investment.loc["NEP-Offshore", "Startnetz"],
+            26,
+            14.5,
+            9.4,
+            None,
+            12.4,
         ],
         "Zubaunetz": [
-            NEP_investment.loc["NEP-DC", "Zubaunetz"],
-            NEP_investment.loc["NEP-AC", "Zubaunetz"],
-            NEP_investment.loc["NEP-Q", "Zubaunetz"],
-            NEP_investment.loc["NEP-Onshore", "Zubaunetz"],
-            NEP_investment.loc["NEP-Offshore", "Zubaunetz"],
+            46.2,
+            30.5,
+            29.5,
+            None,
+            145.1,
         ],
         "exogen": [
-            NEP_investment.loc["PyPSA-DC", "exogen"],
-            NEP_investment.loc["PyPSA-AC", "exogen"],
-            NEP_investment.loc["PyPSA-Q", "exogen"],
-            NEP_investment.loc["PyPSA-Onshore", "exogen"],
-            NEP_investment.loc["PyPSA-Offshore", "exogen"],
+            df.loc[key + "DC|NEP|Onshore"].values.sum() * 5,
+            df.loc[key + "AC|NEP|Onshore"].values.sum() * 5,
+            0,  # see "Übernahme"
+            None,
+            df.loc[key + "NEP|Offshore"].values.sum() * 5,
         ],
         "endogen": [
-            NEP_investment.loc["PyPSA-DC", "endogen"],
-            NEP_investment.loc["PyPSA-AC", "endogen"],
+            (
+                df.loc[key + "DC|Onshore"].values
+                - df.loc[key + "DC|NEP|Onshore"].values
+            ).sum()
+            * 5,
+            (
+                df.loc[key + "AC|Onshore"].values
+                - df.loc[key + "AC|NEP|Onshore"].values
+            ).sum()
+            * 5,
             0,
-            NEP_investment.loc["PyPSA-Onshore", "endogen"],
-            NEP_investment.loc["PyPSA-Offshore", "endogen"],
+            None,
+            (
+                df.loc[key + "Offshore"].values - df.loc[key + "NEP|Offshore"].values
+            ).sum()
+            * 5,
+        ],
+        "Übernahme": [
+            0,
+            df.loc[key + "AC|Übernahme|Startnetz Delta"].values.sum() * 5,
+            df.loc[key + "AC|Übernahme|Reactive Power Compensation"].values.sum() * 5,
+            None,
+            0,
         ],
     }
 
     plotframe = pd.DataFrame(data)
 
+    if currency_year == 2023:
+        plotframe["exogen"] *= 1.1076
+        plotframe["endogen"] *= 1.1076
+        plotframe["Übernahme"] *= 1.1076
+
+    elif currency_year == 2020:
+        plotframe["Startnetz"] /= 1.1076
+        plotframe["Zubaunetz"] /= 1.1076
+    else:
+        raise ValueError("Currency year not supported")
+
+    plotframe.set_index("Kategorie", inplace=True)
+    plotframe.loc["Onshore"] = plotframe.loc[
+        ["AC", "DC", "System-\ndienstleistungen"]
+    ].sum()
     # Define the width of the bars
     bar_width = 0.35
     indices = np.arange(len(plotframe))  # Bar positions
@@ -192,23 +288,69 @@ def plot_NEP(df, savepath=None):
         label="Zubaunetz",
     )
     plt.bar(indices + bar_width, plotframe["exogen"], bar_width, label="exogen")
+    bottom = plotframe["exogen"].copy()
+    if gleichschaltung:
+        plt.bar(
+            indices + bar_width,
+            plotframe["Übernahme"],
+            bar_width,
+            bottom=plotframe["exogen"],
+            label="Übernahme",
+            color="darkgreen",
+        )
+        bottom += plotframe["Übernahme"]
     plt.bar(
         indices + bar_width,
         plotframe["endogen"],
         bar_width,
-        bottom=plotframe["exogen"],
+        bottom=bottom,
         label="endogen",
     )
 
-    plt.xlabel("Category")
-    plt.ylabel("billion EUR")
-    plt.title("Investment in Transmission Grid")
+    plt.xlabel("Kategorie")
+    plt.ylabel(f"Milliarden EUR{currency_year}")
+    plt.title(f"Investitionen ins Übertragungsnetz in EUR{currency_year}")
 
     # Adjust the x-ticks to be between the two bars
-    plt.xticks(indices + bar_width / 2, plotframe["Category"])
+    plt.xticks(indices + bar_width / 2, plotframe.index)
     plt.legend()
 
-    plt.savefig(savepath, bbox_inches="tight")
+    # Rename the category to remove the format string again
+    plotframe.rename(
+        index={"System-\ndienstleistungen": "Systemdienstleistungen"}, inplace=True
+    )
+    plotframe["NEP-Total"] = plotframe["Startnetz"] + plotframe["Zubaunetz"]
+    plotframe["PyPSA-Total"] = (
+        plotframe["exogen"] + plotframe["endogen"] + plotframe["Übernahme"]
+    )
+
+    # Add total costs annotations
+
+    plt.text(
+        1.05,
+        0.95,
+        f"NEP: {round(plotframe.loc["Onshore","NEP-Total"] + plotframe.loc["Offshore","NEP-Total"],1)}",
+        transform=plt.gca().transAxes,
+        fontsize=12,
+        verticalalignment="top",
+        bbox=dict(facecolor="white", alpha=0.5),
+    )
+    plt.text(
+        1.05,
+        0.85,
+        f"PyPSA: {round(plotframe.loc["Onshore","PyPSA-Total"] + plotframe.loc["Offshore","PyPSA-Total"],1)}",
+        transform=plt.gca().transAxes,
+        fontsize=12,
+        verticalalignment="top",
+        bbox=dict(facecolor="white", alpha=0.5),
+    )
+
+    if savepath:
+        plt.savefig(savepath, bbox_inches="tight")
+    else:
+        plt.show()
+
+    plotframe.to_csv(snakemake.output.transmission_investment_csv)
 
 
 def secondary_energy_plot(ddf, name="Secondary Energy"):

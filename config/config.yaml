@@ -107,7 +107,9 @@ countries:
 
 renewable:
   onwind:
-    cutout: europe-2013-sarah3-era5
+    capacity_per_sqkm: 1.4
+    cutout: europe-2019-sarah3-era5
+    correction_factor: 0.95
     resource:
       smooth: false  #this is false until correction to onshore wind speeds from GWA implemented
       #based on Vestas_V112_3MW, but changing hub_height from 80m with time
@@ -130,7 +132,8 @@ renewable:
   offwind-ac:
     capacity_per_sqkm: 6
     landfall_length: 30
-    cutout: europe-2013-sarah3-era5
+    cutout: europe-2019-sarah3-era5
+    correction_factor: 0.95
     resource:
       smooth: true
       #based on NREL_ReferenceTurbine_2020ATB_5.5MW, but changing hub_height from 80m with time
@@ -153,7 +156,8 @@ renewable:
   offwind-dc:
     capacity_per_sqkm: 6
     landfall_length: 30
-    cutout: europe-2013-sarah3-era5
+    cutout: europe-2019-sarah3-era5
+    correction_factor: 0.95
     resource:
       smooth: true
       #based on NREL_ReferenceTurbine_2020ATB_5.5MW, but changing hub_height from 80m with time
@@ -176,13 +180,14 @@ renewable:
   offwind-float: # disabled at the moment
     landfall_length: 30
     capacity_per_sqkm: 6
-    cutout: europe-2013-sarah3-era5
+    cutout: europe-2019-sarah3-era5
+    correction_factor: 0.95
   solar:
-    cutout: europe-2013-sarah3-era5
-    correction_factor: 0.918 # scaling to Abbildung 36 of https://www.ise.fraunhofer.de/de/veroeffentlichungen/studien/aktuelle-fakten-zur-photovoltaik-in-deutschland.html
+    cutout: europe-2019-sarah3-era5
+    correction_factor: 0.9 # scaling to Abbildung 36 of https://www.ise.fraunhofer.de/de/veroeffentlichungen/studien/aktuelle-fakten-zur-photovoltaik-in-deutschland.html
   solar-hsat:
-    cutout: europe-2013-sarah3-era5
-    correction_factor: 0.918 # scaling to Abbildung 36 of https://www.ise.fraunhofer.de/de/veroeffentlichungen/studien/aktuelle-fakten-zur-photovoltaik-in-deutschland.html
+    cutout: europe-2019-sarah3-era5
+    correction_factor: 0.9 # scaling to Abbildung 36 of https://www.ise.fraunhofer.de/de/veroeffentlichungen/studien/aktuelle-fakten-zur-photovoltaik-in-deutschland.html
   hydro:
     cutout: europe-2013-sarah3-era5
 
@@ -200,11 +205,11 @@ clustering:
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#co2-budget
 co2_budget:
-  2020: 0.800 # 20% reduction by 2020
-  2025: 0.620
+  2020: 0.720 # average emissions of 2019 to 2021 relative to 1990, excl LULUCF, EEA data, European Environment Agency. (2023a). Annual European Union greenhouse gas inventory 1990–2021 and inventory report 2023 - CRF Table. https://unfccc.int/documents/627830
+  2025: 0.648 # With additional measures (WAM) projection, CO2 excl LULUCF, European Environment Agency. (2023e). Member States’ greenhouse gas (GHG) emission projections 2023. https://www.eea.europa.eu/en/datahub/datahubitem-view/4b8d94a4-aed7-4e67-a54c-0623a50f48e8
   2030: 0.450 # 55% reduction by 2030 (Ff55)
   2035: 0.250
-  2040: 0.100 # goal to be set next year
+  2040: 0.100 # 90% by 2040
   2045: 0.050
   2050: 0.000 # climate-neutral by 2050
 
@@ -215,6 +220,8 @@ wasserstoff_kernnetz:
   pipes_segment_length: 10
   border_crossing: true
   aggregate_build_years: "mean"
+  recalculate_length: true
+  aggregate_parallel_pipes: true
   ipcei_pci_only: false
   cutoff_year: 2028
   force_all_ipcei_pci: true
@@ -354,14 +361,17 @@ industry:
     2040: 0.12
     2045: 0.16
     2050: 0.20
+  # 15 Mt HVC production (from IDEES) -> 6 Mt Plastikabfälle,
+  # To substitute for other waste, assume all Plastikabfall is used energetically whereas in reality ~40% is recycled
+  # see https://github.com/PyPSA/pypsa-ariadne/pull/292
   HVC_environment_sequestration_fraction:
-    2020: 0.1
-    2025: 0.1
-    2030: 0.12
-    2035: 0.15
-    2040: 0.18
-    2045: 0.20
-    2050: 0.20
+    2020: 0.6
+    2025: 0.6
+    2030: 0.6
+    2035: 0.6
+    2040: 0.6
+    2045: 0.6
+    2050: 0.6
   waste_to_energy: true
   waste_to_energy_cc: true
 
@@ -377,21 +387,19 @@ solving:
     max_iterations: 1 # settings for post-discretization: 1
     post_discretization:
       enable: false
-      line_unit_size: 1700
+      line_unit_size: 1698
       line_threshold: 0.3
       link_unit_size:
-        DC: 2000
+        DC: 1000
         gas pipeline: 1500
         gas pipeline new: 1500
-        H2 pipeline: 13000
-        H2 pipeline (Kernnetz): 13000
-        H2 pipeline retrofitted: 13000
+        H2 pipeline: 4700
+        H2 pipeline retrofitted: 4700
       link_threshold:
         DC: 0.3
         gas pipeline: 0.3
         gas pipeline new: 0.3
         H2 pipeline: 0.05
-        H2 pipeline (Kernnetz): 0.05
         H2 pipeline retrofitted: 0.05
       fractional_last_unit_size: true
   constraints:
@@ -439,19 +447,40 @@ solving:
             2035: 20000
             2040: 50000
             2045: 80000
+      Link:
+        methanolisation:
+          DE:
+            2030: 5.7
+            2035: 5.7
+            2040: 5.7
+            2045: 5.7
+        Fischer-Tropsch:
+          DE:
+            2030: 2.5
+            2035: 2.5
+            2040: 2.5
+            2045: 2.5
+        HVC to air:
+          DE:
+            2020: 0 # all HVC in Germany is either burned or recycled
+            2025: 0
+            2030: 0
+            2035: 0
+            2040: 0
+            2045: 0
     limits_capacity_min:
       Generator:
         onwind:
           DE:
-            2030: 99   # Wind-an-Land Law 2028
+            2030: 99    # Wind-an-Land Law 2028
             2035: 115   # Wind-an-Land Law 2030
-            2040: 115   # Wind-an-Land Law
-            2045: 115
+            2040: 157   # target 2035
+            2045: 160   # target 2040
         offwind:
           DE:
             2030: 22.5   # 75% Wind-auf-See Law
-            2035: 30
-            2040: 40
+            2035: 35
+            2040: 42
             2045: 50
         solar:
           DE:
@@ -596,10 +625,11 @@ co2_price_add_on_fossils:
   2020: 25
   2025: 0
 
-must_run_biogas:
-  enable: false
-  p_min_pu: 0.6
-  regions: ['DE']
+must_run:
+  2020:
+    DE:
+      # lignite: 0.4
+      # biogas: 0.6
 
 emissions_upstream:
   enable: false
@@ -616,3 +646,10 @@ onshore_nep_force:
 offshore_nep_force:
   cutin_year: 2025
   cutout_year: 2030
+  delay_years: 0
+
+scale_capacity:
+  2020:
+    DE:
+      CCGT: 10000
+      "urban central gas CHP": 22000

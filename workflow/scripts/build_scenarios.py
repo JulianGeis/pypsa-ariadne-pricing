@@ -18,14 +18,10 @@ import ruamel.yaml
 
 
 def get_transport_growth(df, planning_horizons):
-    # Aviation growth factor - using REMIND-EU v1.1 since Aladin v1 does not include bunkers
-    aviation_model = snakemake.params.leitmodelle["general"]
     try:
-        aviation = df.loc[aviation_model, "Final Energy|Bunkers|Aviation", "PJ/yr"]
+        aviation = df.loc["Final Energy|Bunkers|Aviation", "PJ/yr"]
     except KeyError:
-        aviation = (
-            df.loc[aviation_model, "Final Energy|Bunkers|Aviation", "TWh/yr"] * 3.6
-        )  # TWh to PJ
+        aviation = df.loc["Final Energy|Bunkers|Aviation", "TWh/yr"] * 3.6  # TWh to PJ
 
     aviation_growth_factor = aviation / aviation[2020]
 
@@ -139,11 +135,7 @@ def get_co2_budget(df, source):
 
     ## PyPSA disregards nonco2 GHG emissions, but includes bunkers
 
-    targets_pypsa = (
-        targets_co2
-        - nonco2
-        + df.loc["Emissions|CO2|Energy|Demand|Bunkers", "Mt CO2/yr"]
-    )
+    targets_pypsa = targets_co2 - nonco2
 
     target_fractions_pypsa = targets_pypsa.loc[targets_co2.index] / baseline_pypsa
 
@@ -160,16 +152,6 @@ def write_to_scenario_yaml(input, output, scenarios, df):
         fallback_reference_scenario = config[scenario]["iiasa_database"][
             "fallback_reference_scenario"
         ]
-        if reference_scenario == "KN2045plus_EasyRide":
-            fallback_reference_scenario = reference_scenario
-        co2_budget_source = config[scenario]["co2_budget_DE_source"]
-
-        co2_budget_fractions = get_co2_budget(
-            df.loc[
-                snakemake.params.leitmodelle["general"], fallback_reference_scenario
-            ],
-            co2_budget_source,
-        )
 
         planning_horizons = [
             2020,
@@ -181,7 +163,26 @@ def write_to_scenario_yaml(input, output, scenarios, df):
         ]  # for 2050 we still need data
 
         aviation_demand_factor = get_transport_growth(
-            df.loc[:, fallback_reference_scenario, :], planning_horizons
+            df.loc[snakemake.params.leitmodelle["transport"], reference_scenario, :],
+            planning_horizons,
+        )
+
+        if reference_scenario.startswith(
+            "KN2045plus"
+        ):  # Still waiting for REMIND uploads
+            fallback_reference_scenario = reference_scenario
+
+        co2_budget_source = config[scenario]["co2_budget_DE_source"]
+
+        if fallback_reference_scenario != reference_scenario:
+            logger.warning(
+                f"For CO2 budget: Using {fallback_reference_scenario} as fallback reference scenario for {scenario}."
+            )
+        co2_budget_fractions = get_co2_budget(
+            df.loc[
+                snakemake.params.leitmodelle["general"], fallback_reference_scenario
+            ],
+            co2_budget_source,
         )
 
         config[scenario]["sector"] = {}

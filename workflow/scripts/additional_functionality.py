@@ -241,9 +241,12 @@ def h2_production_limits(n, investment_year, limits_volume_min, limits_volume_ma
         production = n.links[
             (n.links.carrier == "H2 Electrolysis") & (n.links.bus0.str.contains(ct))
         ].index
+        efficiency = n.links.loc[production, "efficiency"]
 
         lhs = (
-            n.model["Link-p"].loc[:, production] * n.snapshot_weightings.generators
+            n.model["Link-p"].loc[:, production]
+            * n.snapshot_weightings.generators
+            * efficiency
         ).sum()
 
         cname_upper = f"H2_production_limit_upper-{ct}"
@@ -465,10 +468,13 @@ def add_co2limit_country(n, limit_countries, snakemake, debug=False):
 
             for port in [col[3:] for col in n.links if col.startswith("bus")]:
 
-                links = n.links.index[
-                    (n.links.index.str[:2] == ct)
-                    & (n.links[f"bus{port}"] == "co2 atmosphere")
-                ]
+            links = n.links.index[
+                (n.links.index.str[:2] == ct)
+                & (n.links[f"bus{port}"] == "co2 atmosphere")
+                & (
+                    n.links.carrier != "kerosene for aviation"
+                )  # first exclude aviation to multiply it with a domestic factor later
+            ]
 
                 logger.info(
                     f"For {ct} adding following link carriers to port {port} CO2 constraint: {n.links.loc[links,'carrier'].unique()}"
@@ -481,13 +487,37 @@ def add_co2limit_country(n, limit_countries, snakemake, debug=False):
                 else:
                     efficiency = n.links.loc[links, f"efficiency{port}"]
 
-                lhs.append(
-                    (
-                        n.model["Link-p"].loc[:, links]
-                        * efficiency
-                        * n.snapshot_weightings.generators
-                    ).sum()
-                )
+            lhs.append(
+                (
+                    n.model["Link-p"].loc[:, links]
+                    * efficiency
+                    * n.snapshot_weightings.generators
+                ).sum()
+            )
+
+        # Aviation demand
+        energy_totals = pd.read_csv(snakemake.input.energy_totals, index_col=[0, 1])
+        domestic_aviation = energy_totals.loc[
+            ("DE", snakemake.params.energy_year), "total domestic aviation"
+        ]
+        international_aviation = energy_totals.loc[
+            ("DE", snakemake.params.energy_year), "total international aviation"
+        ]
+        domestic_factor = domestic_aviation / (
+            domestic_aviation + international_aviation
+        )
+        aviation_links = n.links[
+            (n.links.index.str[:2] == ct) & (n.links.carrier == "kerosene for aviation")
+        ]
+        lhs.append
+        (
+            n.model["Link-p"].loc[:, aviation_links.index]
+            * aviation_links.efficiency2
+            * n.snapshot_weightings.generators
+        ).sum() * domestic_factor
+        logger.info(
+            f"Adding domestic aviation emissions for {ct} with a factor of {domestic_factor}"
+        )
 
             # Adding Efuel imports and exports to constraint
             incoming_oil = n.links.index[n.links.index == "EU renewable oil -> DE oil"]
@@ -907,46 +937,6 @@ def adapt_nuclear_output(n):
         type="",
         carrier_attribute="",
     )
-
-
-def FT_production_limit(n, investment_year, config):
-    """ "
-    Limit the production of FT fuels in a country to a certain volume.
-    """
-
-    for ct in config["FT_production"]:
-        limit = config["FT_production"][ct][investment_year] * 1e6
-
-        logger.info(f"limiting FT production in {ct} to {limit/1e6} TWh/a")
-
-        prod_links = n.links[
-            (n.links.index.str[:2] == "DE") & (n.links.carrier == "Fischer-Tropsch")
-        ].index
-
-        prod_volume = (
-            n.model["Link-p"].loc[:, prod_links] * n.snapshot_weightings.generators
-        ).sum() / 100
-        # avoid large bounds
-        limit /= 100
-
-        cname = f"FT_production_volume_limit-{ct}"
-
-        n.model.add_constraints(prod_volume <= limit, name=f"GlobalConstraint-{cname}")
-
-        if cname in n.global_constraints.index:
-            logger.warning(
-                f"Global constraint {cname} already exists. Dropping and adding it again."
-            )
-            n.global_constraints.drop(cname, inplace=True)
-
-        n.add(
-            "GlobalConstraint",
-            cname,
-            constant=limit,
-            sense="<=",
-            type="",
-            carrier_attribute="",
-        )
 
 
 def additional_functionality(n, snapshots, snakemake):
