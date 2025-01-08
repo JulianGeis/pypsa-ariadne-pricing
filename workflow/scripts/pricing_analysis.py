@@ -729,7 +729,7 @@ def price_setter(n, bus, timestep, minimum_generation=1e-3, co2_add_on=False, su
         msg_d += f"Warning: Demand until least price taker minus tolerance of {0.1} €/MWh does not match the total demand {d_s} != {d_s_true} (timestep {timestep}) \n"
 
     if not suppress_warnings:
-        if not (s["valid"].any() or  d["valid"].any()):
+        if not (sc["valid"].any() or  dc["valid"].any()):
             logger.warning(f"Warning: No valid price setting technology found for bus {bus} at timestep {timestep}")
             logger.warning(msg_s)
             logger.warning(msg_d)
