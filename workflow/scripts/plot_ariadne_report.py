@@ -1027,6 +1027,7 @@ def plot_backup_capacity(
 
     plt.tight_layout()
     plt.savefig(savepath, bbox_inches="tight")
+    plt.close()
 
 
 def plot_backup_generation(
@@ -1144,6 +1145,7 @@ def plot_backup_generation(
 
     plt.tight_layout()
     plt.savefig(savepath, bbox_inches="tight")
+    plt.close()
 
 
 def plot_elec_prices_spatial(
@@ -1204,10 +1206,8 @@ def plot_elec_prices_spatial(
     # fig.suptitle(f"Spatial Differences in the electricity generation of the VRE technologies ({model})", fontsize=16, **font1)
     fig.tight_layout()
 
-    # plt.close()
-    plt.show()
-
     fig.savefig(savepath, bbox_inches="tight")
+    plt.close()
 
 
 def assign_location(n):
@@ -2308,14 +2308,15 @@ if __name__ == "__main__":
     _networks = [pypsa.Network(fn) for fn in snakemake.input.networks]
     modelyears = [fn[-7:-3] for fn in snakemake.input.networks]
 
-    # Hack the transmission projects
-    networks = [
-        process_postnetworks(n.copy(), _networks[0], int(my), snakemake, c)
-        for n, my, c in zip(_networks, modelyears, costs)
-    ]
-    del _networks
+    if snakemake.params.transmission_projects:   
+        # Hack the transmission projects
+        networks = [
+            hack_transmission_projects(n.copy(), _networks[0], int(my), snakemake, costs)
+            for n, my in zip(_networks, modelyears)
+        ]
+    else:
+        networks = _networks
     
-
     # # for running with explicit networks not within repo structur (comment out load data and load regions)
     # diry = "postnetworks-folder"
     # file_list = os.listdir(diry)
@@ -2442,8 +2443,8 @@ if __name__ == "__main__":
                 network=network,
                 nodal_balance=balance,
                 tech_colors=tech_colors,
-                start_date="2019-01-01 00:00:00",
-                end_date="2019-12-31 00:00:00",
+                start_date=network.snapshots[0],
+                end_date=network.snapshots[-1],
                 savepath=f"{snakemake.output.heat_balances}/heat-all-year-DE-{carriers}-{year}.png",
                 model_run=snakemake.wildcards.run,
                 resample="D",
@@ -2462,8 +2463,8 @@ if __name__ == "__main__":
                 network=network,
                 nodal_balance=balance,
                 tech_colors=tech_colors,
-                start_date="2019-01-01 00:00:00",
-                end_date="2019-01-31 00:00:00",
+                start_date=network.snapshots[0],
+                end_date=network.snapshots[0],
                 savepath=f"{snakemake.output.heat_balances}/heat-Jan-DE-{carriers}-{year}.png",
                 model_run=snakemake.wildcards.run,
                 plot_lmps=False,
@@ -2479,8 +2480,8 @@ if __name__ == "__main__":
                 network=network,
                 nodal_balance=balance,
                 tech_colors=tech_colors,
-                start_date="2019-05-01 00:00:00",
-                end_date="2019-05-31 00:00:00",
+                start_date=network.snapshots[0],
+                end_date=network.snapshots[-1],
                 savepath=f"{snakemake.output.heat_balances}/heat-May-DE-{carriers}-{year}.png",
                 model_run=snakemake.wildcards.run,
                 plot_lmps=False,

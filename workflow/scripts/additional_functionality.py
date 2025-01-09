@@ -468,13 +468,13 @@ def add_co2limit_country(n, limit_countries, snakemake, debug=False):
 
             for port in [col[3:] for col in n.links if col.startswith("bus")]:
 
-            links = n.links.index[
-                (n.links.index.str[:2] == ct)
-                & (n.links[f"bus{port}"] == "co2 atmosphere")
-                & (
-                    n.links.carrier != "kerosene for aviation"
-                )  # first exclude aviation to multiply it with a domestic factor later
-            ]
+                links = n.links.index[
+                    (n.links.index.str[:2] == ct)
+                    & (n.links[f"bus{port}"] == "co2 atmosphere")
+                    & (
+                        n.links.carrier != "kerosene for aviation"
+                    )  # first exclude aviation to multiply it with a domestic factor later
+                ]
 
                 logger.info(
                     f"For {ct} adding following link carriers to port {port} CO2 constraint: {n.links.loc[links,'carrier'].unique()}"
@@ -519,26 +519,26 @@ def add_co2limit_country(n, limit_countries, snakemake, debug=False):
             f"Adding domestic aviation emissions for {ct} with a factor of {domestic_factor}"
         )
 
-            # Adding Efuel imports and exports to constraint
-            incoming_oil = n.links.index[n.links.index == "EU renewable oil -> DE oil"]
-            outgoing_oil = n.links.index[n.links.index == "DE renewable oil -> EU oil"]
+        # Adding Efuel imports and exports to constraint
+        incoming_oil = n.links.index[n.links.index == "EU renewable oil -> DE oil"]
+        outgoing_oil = n.links.index[n.links.index == "DE renewable oil -> EU oil"]
 
-            if not debug:
-                lhs.append(
-                    (
-                        -1
-                        * n.model["Link-p"].loc[:, incoming_oil]
-                        * 0.2571
-                        * n.snapshot_weightings.generators
-                    ).sum()
-                )
-                lhs.append(
-                    (
-                        n.model["Link-p"].loc[:, outgoing_oil]
-                        * 0.2571
-                        * n.snapshot_weightings.generators
-                    ).sum()
-                )
+        if not debug:
+            lhs.append(
+                (
+                    -1
+                    * n.model["Link-p"].loc[:, incoming_oil]
+                    * 0.2571
+                    * n.snapshot_weightings.generators
+                ).sum()
+            )
+            lhs.append(
+                (
+                    n.model["Link-p"].loc[:, outgoing_oil]
+                    * 0.2571
+                    * n.snapshot_weightings.generators
+                ).sum()
+            )
 
             incoming_methanol = n.links.index[
                 n.links.index == "EU methanol -> DE methanol"

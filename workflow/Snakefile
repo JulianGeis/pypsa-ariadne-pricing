@@ -486,6 +486,7 @@ rule export_ariadne_variables:
         post_discretization=config_provider("solving", "options", "post_discretization"),
         NEP_year=config_provider("costs", "NEP"),
         NEP_transmission=config_provider("costs", "transmission"),
+        transmission_projects=config_provider("transmission_projects", "enable"),
     input:
         template=resources("template_ariadne_database.xlsx"),
         industry_demands=expand(
@@ -566,11 +567,11 @@ rule plot_ariadne_variables:
         # investment_energy_supply=RESULTS + "ariadne/investment_energy_supply.png",
         elec_val_2020=RESULTS + "ariadne/elec_val_2020.png",
         trade=RESULTS + "ariadne/trade.png",
-        NEP_plot=RESULTS + "ariadne/NEP_plot.png",
-        NEP_Trassen_plot=RESULTS + "ariadne/NEP_Trassen_plot.png",
-        transmission_investment_csv=RESULTS + "ariadne/transmission_investment.csv",
-        trassenlaenge_csv=RESULTS + "ariadne/trassenlaenge.csv",
-        Kernnetz_Investment_plot=RESULTS + "ariadne/Kernnetz_Investment_plot.png",
+        # NEP_plot=RESULTS + "ariadne/NEP_plot.png",
+        # NEP_Trassen_plot=RESULTS + "ariadne/NEP_Trassen_plot.png",
+        # transmission_investment_csv=RESULTS + "ariadne/transmission_investment.csv",
+        # trassenlaenge_csv=RESULTS + "ariadne/trassenlaenge.csv",
+        # Kernnetz_Investment_plot=RESULTS + "ariadne/Kernnetz_Investment_plot.png",
     log:
         RESULTS + "logs/plot_ariadne_variables.log",
     script:
@@ -595,10 +596,10 @@ rule ariadne_all:
             RESULTS + "ariadne/report/elec_price_duration_curve.png",
             run=config_provider("run", "name"),
         ),
-        expand(
-            RESULTS + "ariadne/pricing/elec_pdc.png",
-            run=config_provider("run", "name"),
-        ),
+        # expand(
+        #     RESULTS + "ariadne/pricing/elec_pdc.png",
+        #     run=config_provider("run", "name"),
+        # ),
         exported_variables=expand(
             RESULTS + "ariadne/exported_variables_full.xlsx",
             run=config_provider("run", "name"),
@@ -660,6 +661,7 @@ rule plot_ariadne_report:
         NEP_year=config_provider("costs", "NEP"),
         hours=config_provider("clustering", "temporal", "resolution_sector"),
         NEP_transmission=config_provider("costs", "transmission"),
+        transmission_projects=config_provider("transmission_projects", "enable"),
     input:
         networks=expand(
             RESULTS
@@ -673,11 +675,6 @@ rule plot_ariadne_report:
             allow_missing=True,
         ),
         rc="matplotlibrc",
-        costs=expand(
-            resources("costs_{planning_horizons}.csv"),
-            **config["scenario"],
-            allow_missing=True,
-        ),
         costs=expand(
             resources("costs_{planning_horizons}.csv"),
             **config["scenario"],

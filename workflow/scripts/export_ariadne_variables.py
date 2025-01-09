@@ -2838,6 +2838,10 @@ def get_emissions(n, region, _energy_totals, industry_demand):
 
     negative_CHP_E_fraction = negative_CHP_E_to_H * (1 / (negative_CHP_E_to_H + 1))
 
+    # separate waste CHPs, because they are accounted differently
+    waste_CHP_emissions = CHP_emissions.filter(like="waste")
+    CHP_emissions = CHP_emissions.drop(waste_CHP_emissions.index)
+
     # It would be interesting to relate the Emissions|CO2|Model to Emissions|CO2 reported to the DB by considering imports of carbon, e.g., (exports_oil_renew - imports_oil_renew) * 0.2571 * t2Mt + (exports_gas_renew - imports_gas_renew) * 0.2571 * t2Mt + (exports_meoh - imports_meoh) / 4.0321 * t2Mt
     # Then it would be necessary to consider negative carbon from solid biomass imports as well
     # Actually we might have to include solid biomass imports in the co2 constraints as well
@@ -5270,12 +5274,12 @@ def get_ariadne_var(
                 industry_production,
             ),
             get_prices(n, region),
-            get_emissions(n, region, energy_totals, industry_demand),
+            # get_emissions(n, region, energy_totals, industry_demand),
             get_policy(n, year),
             get_trade(n, region),
             # get_operational_and_capital_costs(year),
             get_economy(n, region),
-            get_system_cost(n, region),
+            # get_system_cost(n, region),
         ]
     )
 
@@ -5307,39 +5311,39 @@ def get_data(
         year,
     )
 
-    # Renaming variables
+    # # Renaming variables
 
-    var["Investment|Energy Supply|Electricity|Wind Onshore"] = var[
-        "Investment|Energy Supply|Electricity|Wind|Onshore"
-    ]
+    # var["Investment|Energy Supply|Electricity|Wind Onshore"] = var[
+    #     "Investment|Energy Supply|Electricity|Wind|Onshore"
+    # ]
 
-    var["Investment|Energy Supply|Electricity|Wind Offshore"] = var[
-        "Investment|Energy Supply|Electricity|Wind|Offshore"
-    ]
+    # var["Investment|Energy Supply|Electricity|Wind Offshore"] = var[
+    #     "Investment|Energy Supply|Electricity|Wind|Offshore"
+    # ]
 
-    var["Investment|Energy Supply|Electricity|Electricity Storage"] = var[
-        "Investment|Energy Supply|Electricity|Storage Reservoir"
-    ]
+    # var["Investment|Energy Supply|Electricity|Electricity Storage"] = var[
+    #     "Investment|Energy Supply|Electricity|Storage Reservoir"
+    # ]
 
-    var["Investment|Energy Supply|Heat|Heatpump"] = var[
-        "Investment|Energy Supply|Heat|Heat pump"
-    ]
+    # var["Investment|Energy Supply|Heat|Heatpump"] = var[
+    #     "Investment|Energy Supply|Heat|Heat pump"
+    # ]
 
-    var["Investment|Energy Supply|Heat|Solarthermal"] = var[
-        "Investment|Energy Supply|Heat|Solar thermal"
-    ]
+    # var["Investment|Energy Supply|Heat|Solarthermal"] = var[
+    #     "Investment|Energy Supply|Heat|Solar thermal"
+    # ]
 
-    var["Investment|Energy Supply|Hydrogen|Storage"] = var[
-        "Investment|Energy Supply|Hydrogen|Reservoir"
-    ]
+    # var["Investment|Energy Supply|Hydrogen|Storage"] = var[
+    #     "Investment|Energy Supply|Hydrogen|Reservoir"
+    # ]
 
-    var["Investment|Energy Supply|Hydrogen|Electrolysis"] = var[
-        "Investment|Energy Supply|Hydrogen|Electricity"
-    ]
+    # var["Investment|Energy Supply|Hydrogen|Electrolysis"] = var[
+    #     "Investment|Energy Supply|Hydrogen|Electricity"
+    # ]
 
-    var["Investment|Energy Supply|Hydrogen|Fossil"] = var[
-        "Investment|Energy Supply|Hydrogen|Gas"
-    ]
+    # var["Investment|Energy Supply|Hydrogen|Fossil"] = var[
+    #     "Investment|Energy Supply|Hydrogen|Gas"
+    # ]
 
     data = []
     for v in var.index:
@@ -5567,3 +5571,4 @@ if __name__ == "__main__":
     with pd.ExcelWriter(snakemake.output.exported_variables) as writer:
         ariadne_df.round(5).to_excel(writer, sheet_name="data", index=False)
         meta.to_frame().T.to_excel(writer, sheet_name="meta", index=False)
+

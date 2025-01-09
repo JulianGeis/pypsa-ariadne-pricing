@@ -4,7 +4,7 @@
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
-  prefix: 20250108-Pricing-Update
+  prefix: 20250108-Pricing
 
   name:
   # - CurrentPolicies
@@ -108,7 +108,7 @@ countries:
 renewable:
   onwind:
     capacity_per_sqkm: 1.4
-    cutout: europe-2019-sarah3-era5
+    cutout: europe-2013-sarah3-era5
     correction_factor: 0.95
     resource:
       smooth: false  #this is false until correction to onshore wind speeds from GWA implemented
@@ -132,7 +132,7 @@ renewable:
   offwind-ac:
     capacity_per_sqkm: 6
     landfall_length: 30
-    cutout: europe-2019-sarah3-era5
+    cutout: europe-2013-sarah3-era5
     correction_factor: 0.95
     resource:
       smooth: true
@@ -156,7 +156,7 @@ renewable:
   offwind-dc:
     capacity_per_sqkm: 6
     landfall_length: 30
-    cutout: europe-2019-sarah3-era5
+    cutout: europe-2013-sarah3-era5
     correction_factor: 0.95
     resource:
       smooth: true
@@ -180,13 +180,13 @@ renewable:
   offwind-float: # disabled at the moment
     landfall_length: 30
     capacity_per_sqkm: 6
-    cutout: europe-2019-sarah3-era5
+    cutout: europe-2013-sarah3-era5
     correction_factor: 0.95
   solar:
-    cutout: europe-2019-sarah3-era5
+    cutout: europe-2013-sarah3-era5
     correction_factor: 0.9 # scaling to Abbildung 36 of https://www.ise.fraunhofer.de/de/veroeffentlichungen/studien/aktuelle-fakten-zur-photovoltaik-in-deutschland.html
   solar-hsat:
-    cutout: europe-2019-sarah3-era5
+    cutout: europe-2013-sarah3-era5
     correction_factor: 0.9 # scaling to Abbildung 36 of https://www.ise.fraunhofer.de/de/veroeffentlichungen/studien/aktuelle-fakten-zur-photovoltaik-in-deutschland.html
   hydro:
     cutout: europe-2013-sarah3-era5
@@ -312,7 +312,7 @@ sector:
   min_part_load_fischer_tropsch: 0 #0.5
   min_part_load_methanolisation: 0 #0.3
   min_part_load_methanation: 0 #0.3
-  bev_dsm: false
+  bev_dsm: true
   bev_availability: 0.5
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#industry
@@ -626,10 +626,10 @@ co2_price_add_on_fossils:
   2025: 0
 
 must_run:
-  2020:
-    DE:
-      # lignite: 0.4
-      # biogas: 0.6
+  # 2020:
+  #   DE:
+  #     # lignite: 0.4
+  #     # biogas: 0.6
 
 emissions_upstream:
   enable: false

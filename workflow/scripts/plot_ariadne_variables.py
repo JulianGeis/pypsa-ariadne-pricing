@@ -682,8 +682,8 @@ if __name__ == "__main__":
             opts="",
             ll="v1.2",
             sector_opts="None",
-            planning_horizons="2045",
-            run="KN2045_Bal_v4",
+            planning_horizons="2020",
+            run="KN2045_Bal_v4_upstream",
             # configfiles="config/config.public.yaml"
         )
 
