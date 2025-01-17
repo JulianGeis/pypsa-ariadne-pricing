@@ -14,6 +14,10 @@ resources/
 data/
 config/scenarios.automated.yaml
 
+# old results and resources
+results_old/
+resources_old/
+
 ## Core latex/pdflatex auxiliary files:
 *.aux
 *.lof

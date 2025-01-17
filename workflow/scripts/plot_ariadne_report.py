@@ -806,14 +806,14 @@ def plot_price_duration_curve(
     aggregate=True,
     model_run="Model run",
     regions=["DE"],
-    y_lim_values=[-50, 300],
+    y_lim_values=[-50, 500],
     languange="english",
 ):
 
-    # only plot 2030 onwards
-    years = years[2:]
-    networks = dict(islice(networks.items(), 2, None))
-    year_colors = year_colors[2:]
+    # # only plot 2030 onwards
+    # years = years[2:]
+    # networks = dict(islice(networks.items(), 2, None))
+    # year_colors = year_colors[2:]
 
     fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(8, 6))
 
