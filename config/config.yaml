@@ -4,11 +4,11 @@
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
-  prefix: 20250114-Pricing-NewStart
+  prefix: 20250117-Pricing-NoBiomassConstraints
 
   name:
   # - CurrentPolicies
-  #  - KN2045_Bal_v4
+   - KN2045_Bal_v4
    - KN2045_Bal_v4_upstream
   # - KN2045_Elec_v4
   # - KN2045_H2_v4
@@ -19,7 +19,7 @@ run:
   scenarios:
     enable: true
     manual_file: config/scenarios.manual.yaml
-    file: config/scenarios.automated.yaml
+    file: config/scenarios.pricing.yaml
   shared_resources:
     policy: base #stops recalculating
     exclude:
@@ -197,7 +197,7 @@ lines:
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#enable
 enable:
-  retrieve: true # set to false once initial data is retrieved
+  retrieve: false # set to false once initial data is retrieved
   retrieve_cutout: false # set to false once initial data is retrieved
 clustering:
   temporal:
@@ -313,7 +313,7 @@ sector:
   min_part_load_methanolisation: 0 #0.3
   min_part_load_methanation: 0 #0.3
   bev_dsm: 
-    2020: true
+    2020: false
     2025: false
     2030: true 
     2035: true 
@@ -447,28 +447,22 @@ solving:
       Link:
         urban central resistive heater:
           DE:
-            2020: 0
-            2025: 0
+            2020: 5
+            2025: 8
             2030: 10
             2035: 20
-            2040: 50
-            2045: 80
         urban decentral resistive heater:
           DE:
             2020: 5
             2025: 10
             2030: 15
             2035: 30
-            2040: 50
-            2045: 80
         rural resistive heater:
           DE:
             2020: 5
             2025: 8
             2030: 10
             2035: 20
-            2040: 50
-            2045: 80
         methanolisation:
           DE:
             2030: 5.7
@@ -643,7 +637,7 @@ pypsa_eur:
 
 
 co2_price_add_on_fossils:
-  2020: 15 # CO2 price in 2020: 25 € / t CO2
+  2020: 25 # CO2 price in 2020: 25 € / t CO2
   2025: 0  # CO2 price in 2025: 55 € / t CO2
 
 must_run:
