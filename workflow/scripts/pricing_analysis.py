@@ -54,6 +54,66 @@ carrier_renaming_reverse = {
     'lignite CHP': 'urban central lignite CHP'
 }
 
+carrier_groups = {
+    'CCGT': 'gas turbines',
+    'OCGT': 'gas turbines',
+    'coal': 'coal incl. CHP',
+    'urban central coal CHP': 'coal incl. CHP',
+    'urban central lignite CHP': 'lignite incl. CHP',
+    'urban central gas CHP': 'gas CHP',
+    'urban central gas CHP CC': 'gas CHP',
+    'onwind': 'solar+wind',
+    'offwind-ac': 'solar+wind',
+    'offwind-dc': 'solar+wind',
+    'solar': 'solar+wind',
+    'solar-hsat': 'solar+wind',
+    'urban central solid biomass CHP': 'biomass CHP',
+    'biogas': 'gas turbines',
+    'H2 OCGT': 'H2 turbines',
+    'H2 retrofit OCGT': 'H2 turbines',
+    'urban central oil CHP': 'oil inlc. CHP',
+    'lignite': 'lignite incl. CHP',
+    'waste CHP': 'waste CHP',
+    'waste CHP CC': 'waste CHP',
+
+}
+
+group_colors = {
+    'coal incl. CHP': '#545454',
+    'lignite incl. CHP': '#826837',
+    'gas turbines': '#e05b09',
+    'gas CHP': 'darkred',
+    'solar+wind': 'lightgreen',
+    'biomass CHP': 'forestgreen',
+    'PHS': '#51dbcc',
+    'battery discharger': 'darkviolet',
+    'hydro': '#298c81',
+    'H2 turbines': 'darkblue',
+    'nuclear': '#ff8c00',
+    'oil inlc. CHP': '#c9c9c9',
+    'waste CHP': '#e3d37d',
+    'resistive heater': 'indianred',
+    'air heat pump': 'salmon',
+    'ground heat pump': 'firebrick'
+ }
+
+carrier_groups_d = {
+    'urban central resistive heater': 'resistive heater',
+    'urban decentral resistive heater': 'resistive heater',
+    'rural resistive heater': 'resistive heater',
+    'rural air heat pump': 'air heat pump',
+    'urban central air heat pump': 'air heat pump',
+    'urban decentral air heat pump': 'air heat pump',
+    'rural ground heat pump': 'ground heat pump',
+}
+
+
+group_colors_demand = {
+    'resistive heater': 'indianred',
+    'air heat pump': 'salmon',
+    'ground heat pump': 'firebrick',
+}
+
 def get_condense_sum(df, groups, groups_name, return_original=False):
     """
     return condensed df, that has been groupeb by condense groups
@@ -755,15 +815,15 @@ if __name__ == "__main__":
         snakemake = mock_snakemake(
             "pricing_analysis",
             simpl="",
-            clusters=27,
+            clusters=1,
             opts="",
             ll="vopt",
             sector_opts="None",
-            run="KN2045_Bal_v4",
+            run="KN2045_Bal_v4_upstream",
         )
     
     # ensure output directory exist
-    for dir in snakemake.output[1:]:
+    for dir in snakemake.output[2:]:
         if not os.path.exists(dir):
             os.makedirs(dir)
 
@@ -889,12 +949,12 @@ if __name__ == "__main__":
     for year in planning_horizons:
 
         n = networks[2020]
-        if "2019-01-01 00:00:00" in  n.snapshots:
+        if "2019-01-11 15:00:00" in  n.snapshots:
             ts = ["2019-01-11 15:00:00", "2019-08-05 18:00:00",  "2019-06-02 12:00:00"] 
-        elif "2013-01-01 00:00:00" in  n.snapshots:
+        elif "2013-02-18 15:00:00" in  n.snapshots:
             ts = ["2013-02-18 15:00:00", "2013-12-31 15:00:00", "2013-07-07 12:00:00"]
         else: 
-            ts = n.snapshots[[204, 995, 1500]]
+            ts = n.snapshots[[0, 1, -1]]
 
         all_supply_handles_labels = {}
         num_subplots = 3
@@ -905,7 +965,7 @@ if __name__ == "__main__":
         for i in range(num_subplots):
             n = networks[year]
             buses = ["DE0 0"]
-            timestep = ts[i]
+            timestep = str(ts[i])
             supply, demand = get_supply_demand(n, buses, timestep)
             supply_handles_labels = \
                 plot_supply_demand_s(n, supply, demand, buses, timestep, p="volume_bid", d="volume_demand", mc="mc_final",
@@ -948,43 +1008,60 @@ if __name__ == "__main__":
                     compress_demand=True, 
                     year=year)
 
-    # plotting - price setter
+    # plotting - price setter temporal (supply)
     data = results_s
+    markers_here = [6 , 7]
 
-    for year in planning_horizons:
-        df = data[year].copy()
+    for year, ylim in zip(planning_horizons , [(-10, 100) , (-10, 150) , (-10, 200), (-10 , 300) , (-10 , 400) , (-10 , 500)]):
+        df = data[year][data[year].valid].copy()
         df.set_index("timestep", inplace=True)
 
         fig, ax = plt.subplots(figsize=(8, 6))
         for carrier in df.carrier.unique():
-            df["marginal price @ bus"][df.carrier == carrier].plot(style='.', label=carrier, color=tech_colors[carrier])
-        plt.ylim(0,300)
-        plt.title(f"Price setter for electricity in {year}")
+            ax.plot(
+                df[df.carrier == carrier].index, 
+                df["marginal price @ bus"][df.carrier == carrier],
+                marker=markers_here[len(carrier) % 2],
+                markersize=7, 
+                linestyle="", 
+                label=carrier, 
+                color=tech_colors[carrier]
+                )
+        plt.ylim(ylim)
+        plt.title(f"Price setter for electricity in {year} (supply)")
         plt.legend(bbox_to_anchor=(1, 1))
         plt.savefig(f"{snakemake.output.price_setter}/{year}-price-setter.png", bbox_inches='tight')
 
     
-    # plotting - price taker
+    # plotting - price taker temporal (demand)
     data = results_d
 
-    for year in planning_horizons:
-        df = data[year].copy()
-        df = df[df.bidding_price.notna()]
+    for year, ylim in zip(planning_horizons , [(-10, 100) , (-10, 150) , (-10, 200), (-10 , 300) , (-10 , 400) , (-10 , 500)]):
+        df = data[year][data[year].valid].copy()
         df.set_index("timestep", inplace=True)
 
         fig, ax = plt.subplots(figsize=(8, 6))
         for carrier in df.carrier.unique():
-            df["marginal price @ bus"][df.carrier == carrier].plot(style='.', label=carrier, color=tech_colors[carrier])
-        plt.ylim(0,200)
-        plt.title(f"Most expensive price taker for electricity in {year}")
+            ax.plot(
+                df[df.carrier == carrier].index, 
+                df["marginal price @ bus"][df.carrier == carrier],
+                marker=markers_here[len(carrier) % 2],
+                markersize=7, 
+                linestyle="", 
+                label=carrier, 
+                color=tech_colors[carrier]
+                )
+        plt.ylim(ylim)
+        plt.title(f"Least price taker for electricity in {year} (demand)")
         plt.legend(bbox_to_anchor=(1, 1))
         plt.savefig(f"{snakemake.output.price_taker}/{year}-price-taker.png", bbox_inches='tight')
 
+    
     # plotting - market clearing price duration curve (price setter)
     data = results_s
 
     for year in planning_horizons:
-        df = data[year].copy()
+        df = data[year][data[year].valid].copy()
         # select only every 5th row
         df = df.iloc[::5, :]
         df.sort_values(by="marginal price @ bus", ascending=False, inplace=True)
@@ -1009,7 +1086,7 @@ if __name__ == "__main__":
     data = results_d
 
     for year in years:
-        df = data[year].copy()
+        df = data[year][data[year].valid].copy()
         df = df[df.bidding_price.notna()]
         df.sort_values(by="marginal price @ bus", ascending=False, inplace=True)
         df.reset_index(inplace=True)
@@ -1026,6 +1103,7 @@ if __name__ == "__main__":
         plt.legend(bbox_to_anchor=(1, 1),fancybox=True, shadow=True, ncol=1)
         plt.savefig(f"{snakemake.output.pdc_price_taker}/{year}-pdc-price-taker.png", bbox_inches='tight')
 
+    
     # plotting - price duration curves
     # Fraction of time [%]
     bus = "DE0 0" 
@@ -1051,3 +1129,79 @@ if __name__ == "__main__":
     fig.tight_layout()
     plt.savefig(snakemake.output.elec_pdc, bbox_inches='tight')
 
+    # plotting - price setting development
+
+    # supply
+    data = results_s
+    carriers = []
+    for year in planning_horizons:
+        df = data[year][data[year]["valid"] == True].copy()
+        carriers.extend(df.carrier.unique().tolist())
+    carriers = list(set(carriers))
+
+    df_res = pd.DataFrame(index = planning_horizons, columns = carriers)
+    df_res_absolut = pd.DataFrame(index = planning_horizons, columns = carriers)
+
+    for year in planning_horizons:
+        df = data[year][data[year]["valid"] == True].copy()
+        df = df[df.supply_price.notna()]
+        res = df.carrier.value_counts() / df.carrier.value_counts().sum()
+        res_absolut = df.carrier.value_counts()
+        df_res.loc[year] = res[res > 0.03]
+        df_res_absolut.loc[year] = res_absolut[res_absolut > 100]
+
+    df_s_grouped = df_res_absolut.T.groupby(carrier_groups).sum().T
+    df_s_grouped = pd.concat([df_s_grouped, df_res_absolut.loc[:, ~df_res_absolut.columns.isin(carrier_groups.keys())]], axis=1)
+    df_s_grouped = df_s_grouped[df_s_grouped.sum().sort_values(ascending=False).index]
+
+    # demand
+    data = results_d
+    carriers = []
+    for year in planning_horizons:
+        df = data[year][data[year]["valid"]].copy()
+        carriers.extend(df.carrier.unique().tolist())
+    carriers = list(set(carriers))
+
+    df_res = pd.DataFrame(index = planning_horizons, columns = carriers)
+    df_res_absolut = pd.DataFrame(index = planning_horizons, columns = carriers)
+
+    for year in planning_horizons:
+        df = data[year][data[year]["valid"]].copy()
+        res = df.carrier.value_counts() / df.carrier.value_counts().sum()
+        res_absolut = df.carrier.value_counts()
+        df_res.loc[year] = res[res > 0]
+        df_res_absolut.loc[year] = res_absolut[res_absolut > 10]
+    
+    group_colors.update(group_colors_demand)
+
+    df_d_grouped = df_res_absolut.T.groupby(carrier_groups_d).sum().T
+    df_d_grouped = pd.concat([df_d_grouped, df_res_absolut.loc[:, ~df_res_absolut.columns.isin(carrier_groups_d.keys())]], axis=1)
+    df_d_grouped = df_d_grouped[df_d_grouped.sum().sort_values(ascending=False).index]
+
+    # combined plot
+    df_all_grouped = pd.concat([df_s_grouped, df_d_grouped], axis=1)
+    df_all_grouped = df_all_grouped.T.groupby(df_all_grouped.columns).sum().T
+    df_all_grouped = df_all_grouped.loc[:, ~(df_all_grouped == 0).all()]
+
+    res = pd.DataFrame(index=planning_horizons, columns=["Only supply price setter", "Only demand price setter", "Supply and demand price setter"])
+    for year in planning_horizons:
+        df_s = results_s[year].copy().set_index("timestep")
+        df_d = results_d[year].copy().set_index("timestep")
+        df_d = df_s.reset_index().drop_duplicates(subset=['timestep'], keep='first').set_index('timestep')
+        df_s = df_d.reset_index().drop_duplicates(subset=['timestep'], keep='first').set_index('timestep')
+        both_i = df_s[(df_s["valid"] & df_d["valid"])].index
+        only_s_i = df_s[(df_s["valid"] & ~df_d["valid"])].index
+        only_d_i = df_d[(df_d["valid"] & ~df_s["valid"])].index
+        res.loc[year] = [len(only_s_i), len(only_d_i), len(both_i)]
+    
+    # Plot the data
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    color_list = [group_colors.get(carrier, tech_colors.get(carrier)) for carrier in df_all_grouped.columns]
+    df_all_grouped.plot(kind="area", stacked=True, figsize=(8, 6), color=color_list, ax=ax)
+    res.plot(ax=ax, color=["black", "grey", "brown"], linestyle="--", marker="o")
+    plt.title("Development of Price setting Technology for Electricity (total)")
+    plt.xlabel("Year")
+    plt.ylabel("Price Setter [%]")
+    plt.legend(bbox_to_anchor=(1, -0.1), fancybox=True, shadow=True, ncol=4)
+    plt.savefig(snakemake.output.price_setting_dev, bbox_inches='tight')

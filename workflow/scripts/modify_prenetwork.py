@@ -1383,6 +1383,7 @@ if __name__ == "__main__":
 
     force_connection_nep_offshore(n, current_year)
 
-    scale_capacity(n, snakemake.params.scale_capacity)
+    if snakemake.params.scale_capacity is not None:
+        scale_capacity(n, snakemake.params.scale_capacity)
 
     n.export_to_netcdf(snakemake.output.network)

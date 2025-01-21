@@ -4,7 +4,7 @@
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
-  prefix: 20250117-Pricing-NoBiomassConstraints
+  prefix: 20250121-Pricing-NoUnsusBiomassPotential
 
   name:
   # - CurrentPolicies
@@ -664,7 +664,49 @@ offshore_nep_force:
   delay_years: 0
 
 scale_capacity:
-  2020:
-    DE:
-      CCGT: 10000
-      "urban central gas CHP": 22000
+  # 2020:
+  #   DE:
+  #     CCGT: 10000
+  #     "urban central gas CHP": 22000
+
+biomass:
+  year: 2030
+  scenario: ENS_Med
+  classes:
+    solid biomass:
+    - Agricultural waste
+    - Fuelwood residues
+    - Secondary Forestry residues - woodchips
+    - Sawdust
+    - Residues from landscape care
+    not included:
+    - Sugar from sugar beet
+    - Rape seed
+    - "Sunflower, soya seed "
+    - Bioethanol barley, wheat, grain maize, oats, other cereals and rye
+    - Miscanthus, switchgrass, RCG
+    - Willow
+    - Poplar
+    - FuelwoodRW
+    - C&P_RW
+    biogas:
+    - Manure solid, liquid
+    - Sludge
+    municipal solid waste:
+    - Municipal waste
+  share_unsustainable_use_retained:
+    2020: 0
+    2025: 0
+    2030: 0
+    2035: 0
+    2040: 0
+    2045: 0
+    2050: 0
+  share_sustainable_potential_available:
+    2020: 1
+    2025: 1
+    2030: 1
+    2035: 1
+    2040: 1
+    2045: 1
+    2050: 1
