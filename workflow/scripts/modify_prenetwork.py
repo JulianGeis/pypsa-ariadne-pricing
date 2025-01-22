@@ -1285,6 +1285,21 @@ def scale_capacity(n, scaling):
                     links_i_current, "p_nom"
                 ]
 
+def make_demand_elastic(n, params):
+
+    #create inverse demand curve where elastic_intercept is price p where demand d
+    #vanishes and load is demand d for zero p
+    #inverse demand curve: p(d) = intercept - intercept/load*d
+    #utility: U(d) = intercept*d - intercept/(2*load)*d^2
+    #since demand is negative generator, take care with signs!
+    
+    n.add("Generator","load-shedding",
+                bus="DE0 0",
+                carrier="load-shedding",
+                marginal_cost_quadratic=params["intercept"]/(2*params["load"]),
+                p_nom=params["load"])
+
+
 
 if __name__ == "__main__":
     if "snakemake" not in globals():
@@ -1298,12 +1313,12 @@ if __name__ == "__main__":
         snakemake = mock_snakemake(
             "modify_prenetwork",
             simpl="",
-            clusters=27,
+            clusters=1,
             opts="",
             ll="vopt",
             sector_opts="none",
-            planning_horizons="2025",
-            run="KN2045_Bal_v4",
+            planning_horizons="2020",
+            run="KN2045_Bal_v4_upstream",
         )
 
     configure_logging(snakemake)
@@ -1385,5 +1400,9 @@ if __name__ == "__main__":
 
     if snakemake.params.scale_capacity is not None:
         scale_capacity(n, snakemake.params.scale_capacity)
+
+    if snakemake.params.elastic_demand["enable"]:
+        make_demand_elastic(n, snakemake.params.elastic_demand)
+
 
     n.export_to_netcdf(snakemake.output.network)
