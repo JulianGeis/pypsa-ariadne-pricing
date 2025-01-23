@@ -892,6 +892,7 @@ if __name__ == "__main__":
     tech_colors["urban central H2 retrofit CHP"] = "turquoise"
     tech_colors["battery discharger"] = "darkgoldenrod"
     tech_colors["urban central H2 retrofit OCGT"] = "seagreen"
+    tech_colors["load-shedding"] = "slategrey"
     
     # calc price setter info
     networks = n_dict

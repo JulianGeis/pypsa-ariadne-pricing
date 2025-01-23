@@ -571,18 +571,17 @@ solving:
         2045: 35
   elastic_demand:
     enable: true 
-    load: 100 # MW	Constant electricity demand
+    load: 100000 # MW	Constant electricity demand
     intercept: 2000 # EUR/tMWh	Price at which load vanishes
   # solver:
   #   options: gurobi-numeric-focus
-  # solver_options:
-  #   gurobi-default:
-  #     NumericFocus: 1
-  #     FeasibilityTol: 1.e-4
-  #     BarHomogeneous: 1
+  solver_options:
+    gurobi-default:
+      # NumericFocus: 1
+      # FeasibilityTol: 1.e-4
+      BarHomogeneous: 1
 
   
-
 
 plotting:
   tech_colors:

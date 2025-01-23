@@ -1297,6 +1297,7 @@ def make_demand_elastic(n, params):
                 bus="DE0 0",
                 carrier="load-shedding",
                 marginal_cost_quadratic=params["intercept"]/(2*params["load"]),
+                # marginal_cost=0,
                 p_nom=params["load"])
 
 
