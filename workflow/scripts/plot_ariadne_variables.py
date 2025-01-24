@@ -430,8 +430,8 @@ def side_by_side_plot(df, dfhybrid, title, savepath, rshift=1.25, **kwargs):
 
     idx = df.index.union(dfhybrid.index, sort=False)
 
-    df = df.reindex(idx)
-    dfhybrid = dfhybrid.reindex(idx)
+    df = df.reindex(idx).abs()
+    dfhybrid = dfhybrid.reindex(idx).abs()
 
     fig, axes = plt.subplots(ncols=2, sharey=True)
     ax = ariadne_subplot(df, axes[0], "PyPSA-Eur", **kwargs)
