@@ -4,7 +4,7 @@
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
-  prefix: 20250122-Pricing-Elastic_Demand
+  prefix: 20250127-Pricing-Elastic_Demand
 
   name:
   # - CurrentPolicies
@@ -569,10 +569,6 @@ solving:
         2035: 25
         2040: 30
         2045: 35
-  elastic_demand:
-    enable: true 
-    load: 100000 # MW	Constant electricity demand
-    intercept: 2000 # EUR/tMWh	Price at which load vanishes
   # solver:
   #   options: gurobi-numeric-focus
   solver_options:
@@ -716,3 +712,24 @@ biomass:
     2040: 1
     2045: 1
     2050: 1
+
+demand_modelling: 
+  enable: true
+  voll: false 
+  elastic: true 
+  elastic_pwl: false # false, default, lower, higher
+  elastic_intercept: 2000 # EUR/tMWh	Price at which load vanishes
+  voll_price: 2000 # €/MWh
+  elastic_pwl_params:
+    default:
+      intercept: [8000, 400, 200]
+      slope: [80, 40, 20]
+      nominal: [95, 5, 10]
+    lower:
+      intercept: [16000, 800, 400]
+      slope: [160, 80, 40]
+      nominal: [95, 5, 10]
+    higher:
+      intercept: [4000, 200, 100]
+      slope: [40, 20, 10]
+      nominal: [95, 5, 10]

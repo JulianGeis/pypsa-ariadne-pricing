@@ -1285,21 +1285,52 @@ def scale_capacity(n, scaling):
                     links_i_current, "p_nom"
                 ]
 
-def make_demand_elastic(n, params):
-
-    #create inverse demand curve where elastic_intercept is price p where demand d
-    #vanishes and load is demand d for zero p
-    #inverse demand curve: p(d) = intercept - intercept/load*d
-    #utility: U(d) = intercept*d - intercept/(2*load)*d^2
-    #since demand is negative generator, take care with signs!
+def adapt_demand_modelling(n, params):
     
-    n.add("Generator","load-shedding",
-                bus="DE0 0",
-                carrier="load-shedding",
-                marginal_cost_quadratic=params["intercept"]/(2*params["load"]),
-                # marginal_cost=0,
-                p_nom=params["load"])
+    bus = "DE0 0"
+    load_temporal = n.loads_t.p_set.T.groupby(n.loads.bus).sum().T[bus]
 
+    if params["voll"]:
+        logger.info(f"Adding VOLL Generator with marginal cost of {params["voll_price"]} €/Mwh.")
+        n.add(
+            "Generator",
+            "load-shedding",
+            bus=bus,
+            carrier="load-shedding",
+            marginal_cost=params["voll_price"],
+            p_nom=load_temporal.max(),
+        )
+    
+    if params["elastic"]:
+        logger.info("Adding elastic demand.")
+        n.add(
+            "Generator",
+            "load-shedding",
+            bus=bus,
+            carrier="load",
+            marginal_cost_quadratic=params["elastic_intercept"] / (2 * load_temporal),
+            marginal_cost=0,
+            p_nom=load_temporal.max(),
+        )
+        
+    if param_set := params["elastic_pwl"]:
+        logger.info(f"Adding piecewise linear elastic demand with set '{param_set}'.")
+        pwl = params["elastic_pwl_params"][param_set]
+        assert (
+            len(pwl["intercept"]) == len(pwl["slope"]) == len(pwl["nominal"])
+        ), "Piecewise linear demand must have same number of points for intercept, slope, and nominal."
+        for i, (intercept, slope, nominal) in enumerate(
+            zip(pwl["intercept"], pwl["slope"], pwl["nominal"])
+        ):
+            n.add(
+                "Generator",
+                f"load-shedding-segment-{i}",
+                bus=bus,
+                carrier="load-shedding",
+                marginal_cost=intercept - slope * nominal,
+                marginal_cost_quadratic=slope / 2,
+                p_nom=nominal,
+            )
 
 
 if __name__ == "__main__":
@@ -1402,8 +1433,7 @@ if __name__ == "__main__":
     if snakemake.params.scale_capacity is not None:
         scale_capacity(n, snakemake.params.scale_capacity)
 
-    if snakemake.params.elastic_demand["enable"]:
-        make_demand_elastic(n, snakemake.params.elastic_demand)
-
+    if snakemake.params.demand_modelling["enable"]:
+        adapt_demand_modelling(n, snakemake.params.demand_modelling)
 
     n.export_to_netcdf(snakemake.output.network)
