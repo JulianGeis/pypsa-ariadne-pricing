@@ -719,6 +719,7 @@ demand_modelling:
   elastic: true 
   elastic_pwl: false # false, default, lower, higher
   elastic_intercept: 2000 # EUR/tMWh	Price at which load vanishes
+  elastic_load: 10000 # MW; if false load.max() of bus "DE0 0" is used
   voll_price: 2000 # €/MWh
   elastic_pwl_params:
     default:

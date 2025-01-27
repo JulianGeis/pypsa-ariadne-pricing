@@ -1303,14 +1303,21 @@ def adapt_demand_modelling(n, params):
     
     if params["elastic"]:
         logger.info("Adding elastic demand.")
+        if params["elastic_load"]:
+            load = params["elastic_load"]
+            load_max = load
+        else:
+            load = load_temporal
+            load_max = load_temporal.max()
+
         n.add(
             "Generator",
             "load-shedding",
             bus=bus,
             carrier="load",
-            marginal_cost_quadratic=params["elastic_intercept"] / (2 * load_temporal),
+            marginal_cost_quadratic=params["elastic_intercept"] / (2 * load),
             marginal_cost=0,
-            p_nom=load_temporal.max(),
+            p_nom=load_max,
         )
         
     if param_set := params["elastic_pwl"]:
