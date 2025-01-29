@@ -1318,6 +1318,7 @@ def adapt_demand_modelling(n, params):
             marginal_cost_quadratic=params["elastic_intercept"] / (2 * load),
             marginal_cost=0,
             p_nom=load_max,
+            p_max_pu = load/load_max
         )
         
     if param_set := params["elastic_pwl"]:
