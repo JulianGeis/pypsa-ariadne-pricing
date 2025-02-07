@@ -4,7 +4,7 @@
 
 # docs in https://pypsa-eur.readthedocs.io/en/latest/configuration.html#run
 run:
-  prefix: 20250127-Pricing-Elastic_Demand
+  prefix: 20250202-Pricing-Default
 
   name:
   # - CurrentPolicies
@@ -582,6 +582,7 @@ solving:
 plotting:
   tech_colors:
     load: "#111100"
+    load-shedding: "#111100"
     H2 pipeline (Kernnetz): '#6b3161'
     renewable oil: '#c9c9c9'
     urban central H2 retrofit CHP: '#ff0000'
@@ -717,9 +718,9 @@ demand_modelling:
   enable: true
   voll: false 
   elastic: false 
-  elastic_pwl: default # false, default, lower, higher
+  elastic_pwl: false # false, default, lower, higher
   elastic_intercept: 2000 # EUR/tMWh	Price at which load vanishes
-  elastic_load: 10000 # MW; if false load.max() of bus "DE0 0" is used
+  elastic_load: 10000 # MW
   voll_price: 2000 # €/MWh
   elastic_pwl_params:
     default:
