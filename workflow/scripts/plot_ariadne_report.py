@@ -2316,6 +2316,13 @@ if __name__ == "__main__":
         ]
     else:
         networks = _networks
+
+    # add reversed column
+    for network in networks:
+        if "reversed" not in network.lines.columns:
+            network.lines["reversed"] = False
+        if "reversed" not in network.links.columns:
+            network.links["reversed"] = False
     
     # # for running with explicit networks not within repo structur (comment out load data and load regions)
     # diry = "postnetworks-folder"

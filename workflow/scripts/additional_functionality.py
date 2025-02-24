@@ -6,6 +6,7 @@ import os
 import pandas as pd
 from prepare_sector_network import determine_emission_sectors
 from xarray import DataArray
+from pypsa.descriptors import nominal_attrs
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,17 @@ specific_emissions = {
 
 
 def add_capacity_limits(n, investment_year, limits_capacity, sense="maximum"):
+
+    # check if there is any extendable capacity. If not skip the function
+    all_empty = True
+    for c, attr in nominal_attrs.items():
+        ext_i = n.get_extendable_i(c)
+        if not ext_i.empty:
+            all_empty = False
+            break
+    # If all are empty, return early
+    if all_empty:
+        return
 
     for c in n.iterate_components(limits_capacity):
         logger.info(f"Adding {sense} constraints for {c.list_name}")

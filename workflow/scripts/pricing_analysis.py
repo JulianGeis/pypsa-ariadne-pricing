@@ -235,6 +235,11 @@ def get_supply_demand(n, buses, timestep, co2_add_on=False):
         volume_bid = p_nom_opt * p_max_pu
         mc_final = mc 
         carrier = n.generators.loc[gen].carrier
+
+        if n.generators.loc[gen].carrier in ["load-shedding", "load"]: # alter values for load shedding
+            volume_bid = p
+            mc = p * n.generators.loc[gen].marginal_cost_quadratic + n.generators.loc[gen].marginal_cost
+            mc_final = mc   
         
         supply.loc[gen] = [mc, capex_add_on, p_nom_opt, p, volume_bid, mc_final, carrier]
 
@@ -397,7 +402,7 @@ def plot_supply_demand(n,
                     compress_demand=False, 
                     year=9999):
     # Filter out technologies with negative supply
-    drop_c = ["electricity distribution grid", "load", "BEV charger"]
+    drop_c = ["electricity distribution grid", "BEV charger"]
     supply = supply[(supply[p] >= 1) & ~(supply.carrier.isin(drop_c))]
 
     # Convert to GW
@@ -528,7 +533,7 @@ def plot_supply_demand_s(n, supply, demand, buses, timestep, ylim=None, p="p_nom
                        only_carriers=False, whole_system=False, demand_plot=True, demand_text=True, 
                        compress_demand=False, ax=None, year=9999):
     # Filter out technologies with negative supply
-    drop_c = ["electricity distribution grid", "load", "BEV charger"]
+    drop_c = ["electricity distribution grid", "BEV charger"]
     supply = supply[(supply[p] >= 5) & ~(supply.carrier.isin(drop_c))]
     supply.loc[:,p] = supply[p] / 1e3 # Convert to GW
     

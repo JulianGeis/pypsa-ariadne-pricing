@@ -5461,6 +5461,13 @@ if __name__ == "__main__":
     else:
         networks = _networks
 
+    # add reversed column
+    for network in networks:
+        if "reversed" not in network.lines.columns:
+            network.lines["reversed"] = False
+        if "reversed" not in network.links.columns:
+            network.links["reversed"] = False
+
     if "debug" == "debug":  # For debugging
         var = pd.Series()
         idx = 0
