@@ -11,7 +11,7 @@ run:
   scenarios:
     enable: true
     manual_file: config/scenarios.public.yaml
-    file: config/scenarios.automated.yaml
+    file: config/scenarios.pricing.yaml
   shared_resources:
     policy: base #stops recalculating
     exclude:

@@ -430,8 +430,8 @@ def side_by_side_plot(df, dfhybrid, title, savepath, rshift=1.25, **kwargs):
 
     idx = df.index.union(dfhybrid.index, sort=False)
 
-    df = df.reindex(idx)
-    dfhybrid = dfhybrid.reindex(idx)
+    df = df.reindex(idx).abs()
+    dfhybrid = dfhybrid.reindex(idx).abs()
 
     fig, axes = plt.subplots(ncols=2, sharey=True)
     ax = ariadne_subplot(df, axes[0], "PyPSA-Eur", **kwargs)
@@ -682,8 +682,8 @@ if __name__ == "__main__":
             opts="",
             ll="v1.2",
             sector_opts="None",
-            planning_horizons="2045",
-            run="KN2045_Bal_v4",
+            planning_horizons="2020",
+            run="KN2045_Bal_v4_upstream",
             # configfiles="config/config.public.yaml"
         )
 
@@ -902,18 +902,18 @@ if __name__ == "__main__":
         unit="EUR/tCO2",
     )
 
-    within_plot(
-        df[
-            df.index.get_level_values("Variable").str.startswith(
-                "Investment|Energy Supply"
-            )
-        ],
-        dfremind,
-        title="Investment in Energy Supply",
-        savepath=snakemake.output.investment_energy_supply,
-        unit="Billionen EUR",
-        write_sum=True,
-    )
+    # within_plot(
+    #     df[
+    #         df.index.get_level_values("Variable").str.startswith(
+    #             "Investment|Energy Supply"
+    #         )
+    #     ],
+    #     dfremind,
+    #     title="Investment in Energy Supply",
+    #     savepath=snakemake.output.investment_energy_supply,
+    #     unit="billion EUR",
+    #     write_sum=True,
+    # )
 
     elec_val_plot(df, savepath=snakemake.output.elec_val_2020)
 
@@ -925,9 +925,5 @@ if __name__ == "__main__":
         unit="PJ/yr",
     )
 
-    plot_NEP(df, savepath=snakemake.output.NEP_plot)
-    plot_NEP_Trassen(df, savepath=snakemake.output.NEP_Trassen_plot)
-
-    plot_Kernnetz(
-        df, savepath=snakemake.output.Kernnetz_Investment_plot, currency_year=2020
-    )
+    # plot_NEP(df, savepath=snakemake.output.NEP_plot)
+    # plot_NEP_Trassen(df, savepath=snakemake.output.NEP_Trassen_plot)

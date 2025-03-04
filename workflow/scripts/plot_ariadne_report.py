@@ -24,6 +24,7 @@ sys.path.insert(1, os.path.abspath(path))
 from _helpers import configure_logging, set_scenario_config
 from export_ariadne_variables import get_discretized_value, process_postnetworks
 from plot_power_network import load_projection
+from prepare_sector_network import prepare_costs
 from plot_summary import preferred_order, rename_techs
 from prepare_sector_network import prepare_costs
 from pypsa.plot import add_legend_circles, add_legend_lines, add_legend_patches
@@ -805,14 +806,14 @@ def plot_price_duration_curve(
     aggregate=True,
     model_run="Model run",
     regions=["DE"],
-    y_lim_values=[-50, 300],
+    y_lim_values=[-50, 500],
     languange="english",
 ):
 
-    # only plot 2030 onwards
-    years = years[2:]
-    networks = dict(islice(networks.items(), 2, None))
-    year_colors = year_colors[2:]
+    # # only plot 2030 onwards
+    # years = years[2:]
+    # networks = dict(islice(networks.items(), 2, None))
+    # year_colors = year_colors[2:]
 
     fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(8, 6))
 
@@ -1026,6 +1027,7 @@ def plot_backup_capacity(
 
     plt.tight_layout()
     plt.savefig(savepath, bbox_inches="tight")
+    plt.close()
 
 
 def plot_backup_generation(
@@ -1143,6 +1145,7 @@ def plot_backup_generation(
 
     plt.tight_layout()
     plt.savefig(savepath, bbox_inches="tight")
+    plt.close()
 
 
 def plot_elec_prices_spatial(
@@ -1203,10 +1206,8 @@ def plot_elec_prices_spatial(
     # fig.suptitle(f"Spatial Differences in the electricity generation of the VRE technologies ({model})", fontsize=16, **font1)
     fig.tight_layout()
 
-    # plt.close()
-    plt.show()
-
     fig.savefig(savepath, bbox_inches="tight")
+    plt.close()
 
 
 def assign_location(n):
@@ -2307,13 +2308,22 @@ if __name__ == "__main__":
     _networks = [pypsa.Network(fn) for fn in snakemake.input.networks]
     modelyears = [fn[-7:-3] for fn in snakemake.input.networks]
 
-    # Hack the transmission projects
-    networks = [
-        process_postnetworks(n.copy(), _networks[0], int(my), snakemake, c)
-        for n, my, c in zip(_networks, modelyears, costs)
-    ]
-    del _networks
+    if snakemake.params.transmission_projects:   
+        # Hack the transmission projects
+        networks = [
+            hack_transmission_projects(n.copy(), _networks[0], int(my), snakemake, costs)
+            for n, my in zip(_networks, modelyears)
+        ]
+    else:
+        networks = _networks
 
+    # add reversed column
+    for network in networks:
+        if "reversed" not in network.lines.columns:
+            network.lines["reversed"] = False
+        if "reversed" not in network.links.columns:
+            network.links["reversed"] = False
+    
     # # for running with explicit networks not within repo structur (comment out load data and load regions)
     # diry = "postnetworks-folder"
     # file_list = os.listdir(diry)
@@ -2386,8 +2396,8 @@ if __name__ == "__main__":
             network=network,
             nodal_balance=balance,
             tech_colors=tech_colors,
-            start_date="2019-01-01 00:00:00",
-            end_date="2019-12-31 00:00:00",
+            start_date=network.snapshots[0],
+            end_date=network.snapshots[-1],
             savepath=f"{snakemake.output.elec_balances}/elec-all-year-DE-{year}.png",
             model_run=snakemake.wildcards.run,
             resample="D",
@@ -2405,8 +2415,8 @@ if __name__ == "__main__":
             network=network,
             nodal_balance=balance,
             tech_colors=tech_colors,
-            start_date="2019-01-01 00:00:00",
-            end_date="2019-01-31 00:00:00",
+            start_date=network.snapshots[0],
+            end_date=network.snapshots[-1],
             savepath=f"{snakemake.output.elec_balances}/elec-Jan-DE-{year}.png",
             model_run=snakemake.wildcards.run,
             german_carriers=True,
@@ -2421,8 +2431,8 @@ if __name__ == "__main__":
             network=network,
             nodal_balance=balance,
             tech_colors=tech_colors,
-            start_date="2019-05-01 00:00:00",
-            end_date="2019-05-31 00:00:00",
+            start_date=network.snapshots[0],
+            end_date=network.snapshots[-1],
             savepath=f"{snakemake.output.elec_balances}/elec-May-DE-{year}.png",
             model_run=snakemake.wildcards.run,
             german_carriers=True,
@@ -2440,8 +2450,8 @@ if __name__ == "__main__":
                 network=network,
                 nodal_balance=balance,
                 tech_colors=tech_colors,
-                start_date="2019-01-01 00:00:00",
-                end_date="2019-12-31 00:00:00",
+                start_date=network.snapshots[0],
+                end_date=network.snapshots[-1],
                 savepath=f"{snakemake.output.heat_balances}/heat-all-year-DE-{carriers}-{year}.png",
                 model_run=snakemake.wildcards.run,
                 resample="D",
@@ -2460,8 +2470,8 @@ if __name__ == "__main__":
                 network=network,
                 nodal_balance=balance,
                 tech_colors=tech_colors,
-                start_date="2019-01-01 00:00:00",
-                end_date="2019-01-31 00:00:00",
+                start_date=network.snapshots[0],
+                end_date=network.snapshots[0],
                 savepath=f"{snakemake.output.heat_balances}/heat-Jan-DE-{carriers}-{year}.png",
                 model_run=snakemake.wildcards.run,
                 plot_lmps=False,
@@ -2477,8 +2487,8 @@ if __name__ == "__main__":
                 network=network,
                 nodal_balance=balance,
                 tech_colors=tech_colors,
-                start_date="2019-05-01 00:00:00",
-                end_date="2019-05-31 00:00:00",
+                start_date=network.snapshots[0],
+                end_date=network.snapshots[-1],
                 savepath=f"{snakemake.output.heat_balances}/heat-May-DE-{carriers}-{year}.png",
                 model_run=snakemake.wildcards.run,
                 plot_lmps=False,
@@ -2495,8 +2505,8 @@ if __name__ == "__main__":
         plot_storage(
             network=network,
             tech_colors=tech_colors,
-            start_date="2019-01-01 00:00:00",
-            end_date="2019-12-31 00:00:00",
+            start_date=network.snapshots[0],
+            end_date=network.snapshots[-1],
             savepath=f"{snakemake.output.results}/storage-DE-{year}.png",
             model_run=snakemake.wildcards.run,
         )
@@ -2557,7 +2567,8 @@ if __name__ == "__main__":
     map_opts = snakemake.params.plotting["map"]
     snakemake.params.plotting["projection"] = {"name": "EqualEarth"}
     proj = load_projection(snakemake.params.plotting)
-
+    regions = gpd.read_file(snakemake.input.regions_onshore_clustered).set_index("name")
+    
     for year in planning_horizons:
         network = networks[planning_horizons.index(year)].copy()
         logger.info(f"Plotting hydrogen transmission for {year}")
